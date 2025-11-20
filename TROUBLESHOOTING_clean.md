@@ -172,7 +172,7 @@ ORDER BY extraction_timestamp DESC;
 ```sql
 -- Verify AI_EXTRACT is available in your region
 SELECT SNOWFLAKE.CORTEX.AI_EXTRACT(
-    BUILD_SCOPED_FILE_URL(@invoice_stage, 'test.pdf'),
+    TO_FILE(@invoice_stage, 'test.pdf'),
     {'test_field': 'Test extraction'}
 );
 ```
@@ -248,7 +248,7 @@ WHERE processing_status = 'SUCCESS';
 -- Solution B: Test extraction manually
 SELECT 
     SNOWFLAKE.CORTEX.AI_EXTRACT(
-        BUILD_SCOPED_FILE_URL(@invoice_stage, 'MB66680464.pdf'),
+        TO_FILE(@invoice_stage, 'MB66680464.pdf'),
         {
             'invoice_number': 'Invoice number',
             'total_amount': 'Total amount'
@@ -554,9 +554,9 @@ SELECT COUNT(*) FROM DIRECTORY(@invoice_stage);
 
 ```sql
 -- Solution A: Recreate the stream
+-- Note: Directory streams cannot use APPEND_ONLY = TRUE
 CREATE OR REPLACE STREAM invoice_stage_stream 
-ON STAGE invoice_stage
-APPEND_ONLY = TRUE;
+ON STAGE invoice_stage;
 
 -- Solution B: Check if stream was consumed
 -- Streams are consumed after task reads from them
@@ -656,7 +656,8 @@ TRUNCATE TABLE invoice;
 TRUNCATE TABLE raw_json;
 
 -- Recreate streams
-CREATE OR REPLACE STREAM invoice_stage_stream ON STAGE invoice_stage APPEND_ONLY = TRUE;
+-- Note: Directory streams cannot use APPEND_ONLY = TRUE
+CREATE OR REPLACE STREAM invoice_stage_stream ON STAGE invoice_stage;
 CREATE OR REPLACE STREAM raw_json_stream ON TABLE raw_json APPEND_ONLY = TRUE;
 
 -- Refresh stage

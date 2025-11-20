@@ -22,6 +22,7 @@ USE SCHEMA invoice_pipeline;
 
 -- Create internal stage for storing PDF invoice files
 CREATE OR REPLACE STAGE invoice_stage
+    ENCRYPTION = (TYPE = 'SNOWFLAKE_SSE')
     DIRECTORY = (ENABLE = TRUE)
     COMMENT = 'Stage for storing PDF invoice files';
 
@@ -35,9 +36,9 @@ CREATE OR REPLACE STAGE invoice_stage
 -- Stream to capture new files added to the stage
 -- Note: The stage already has an implicit directory table (DIRECTORY = ENABLE = TRUE)
 -- We can create a stream directly on the stage to monitor file changes
+-- Note: Directory streams cannot be APPEND_ONLY since they track both additions and deletions
 CREATE OR REPLACE STREAM invoice_stage_stream 
 ON STAGE invoice_stage
-APPEND_ONLY = TRUE
 COMMENT = 'Stream to track new PDF files in invoice stage';
 
 -- Refresh directory when files are uploaded
@@ -137,12 +138,9 @@ CREATE OR REPLACE TABLE invoice_detail (
     unit_of_measure VARCHAR(50),
     unit_price DECIMAL(18,4),
     line_amount DECIMAL(18,2),
-    discount_percent DECIMAL(5,2),
-    discount_amount DECIMAL(18,2),
     tax_amount DECIMAL(18,2),
     
     -- Additional Fields
-    category VARCHAR(200),
     notes VARCHAR(1000),
     
     -- Metadata
@@ -173,7 +171,7 @@ DECLARE
     -- Cursor to process files from stream
     c_files CURSOR FOR 
         SELECT RELATIVE_PATH as file_name,
-               '@invoice_stage/' || RELATIVE_PATH as file_url,
+               BUILD_SCOPED_FILE_URL(@invoice_stage, RELATIVE_PATH) as file_url,
                SIZE as file_size,
                LAST_MODIFIED
         FROM invoice_stage_stream
@@ -189,60 +187,78 @@ BEGIN
         BEGIN
             -- Execute AI_EXTRACT function to parse the PDF
             SELECT SNOWFLAKE.CORTEX.AI_EXTRACT(
-                v_file_url,
-                {
-                    'invoice_number': 'Invoice number',
-                    'invoice_date': 'Invoice date in YYYY-MM-DD format',
-                    'due_date': 'Payment due date in YYYY-MM-DD format',
-                    'vendor': {
-                        'name': 'Vendor or seller company name',
-                        'address': 'Vendor street address',
-                        'city': 'Vendor city',
-                        'state': 'Vendor state or province',
-                        'zip': 'Vendor postal code',
-                        'country': 'Vendor country',
-                        'phone': 'Vendor phone number',
-                        'email': 'Vendor email address',
-                        'tax_id': 'Vendor tax ID or EIN'
-                    },
-                    'customer': {
-                        'name': 'Customer or buyer company name',
-                        'address': 'Customer street address',
-                        'city': 'Customer city',
-                        'state': 'Customer state or province',
-                        'zip': 'Customer postal code',
-                        'country': 'Customer country',
-                        'phone': 'Customer phone number',
-                        'email': 'Customer email address'
-                    },
-                    'financial': {
-                        'subtotal': 'Subtotal amount before tax',
-                        'tax_amount': 'Total tax amount',
-                        'tax_rate': 'Tax rate percentage',
-                        'shipping_amount': 'Shipping or freight charges',
-                        'discount_amount': 'Total discount amount',
-                        'total_amount': 'Final total amount',
-                        'currency': 'Currency code (e.g., USD, EUR)'
-                    },
-                    'payment_terms': 'Payment terms (e.g., Net 30, Due on Receipt)',
-                    'po_number': 'Purchase order number',
-                    'notes': 'Additional notes or comments on the invoice',
-                    'line_items': [
-                        {
-                            'line_number': 'Line item number',
-                            'description': 'Item or service description',
-                            'item_code': 'Item code, SKU, or product ID',
-                            'quantity': 'Quantity ordered',
-                            'unit_of_measure': 'Unit of measure (e.g., EA, HR, BOX)',
-                            'unit_price': 'Price per unit',
-                            'line_amount': 'Total line amount (quantity × unit price)',
-                            'discount_percent': 'Discount percentage for this line',
-                            'discount_amount': 'Discount amount for this line',
-                            'tax_amount': 'Tax amount for this line',
-                            'category': 'Item category or type',
-                            'notes': 'Additional line item notes'
+                file => TO_FILE(@invoice_stage, v_file_name),
+                responseFormat => {
+                    'schema': {
+                        'type': 'object',
+                        'properties': {
+                            'invoice_number': 'Invoice number',
+                            'order_number': 'Order number',
+                            'invoice_date': 'Invoice date in YYYY-MM-DD format',
+                            'due_date': 'Payment due date in YYYY-MM-DD format',
+                            'vendor': 'Vendor or seller company name',
+                            'vendor_address': 'Complete vendor address',
+                            'vendor_phone': 'Vendor phone number',
+                            'vendor_email': 'Vendor email address',
+                            'vendor_tax_id': 'Vendor tax ID or EIN',
+                            'customer': 'Customer or buyer company name',
+                            'customer_address': 'Complete customer address',
+                            'customer_phone': 'Customer phone number',
+                            'customer_email': 'Customer email address',
+                            'subtotal': 'Subtotal amount before tax',
+                            'tax_amount': 'Total tax amount',
+                            'tax_rate': 'Tax rate percentage',
+                            'shipping_amount': 'Shipping or freight charges',
+                            'discount_amount': 'Total discount amount',
+                            'total_amount': 'Final total amount',
+                            'currency': 'Currency code (e.g., USD, EUR)',
+                            'payment_terms': 'Payment terms (e.g., Net 30, Due on Receipt)',
+                            'po_number': 'Purchase order number',
+                            'notes': 'Additional notes or comments on the invoice',
+                            'line_items': {
+                                'description': 'Invoice line item details',
+                                'type': 'object',
+                                'properties': {
+                                    'line_number': {
+                                        'description': 'Line item number',
+                                        'type': 'array'
+                                    },
+                                    'line_description': {
+                                        'description': 'Item or service description',
+                                        'type': 'array'
+                                    },
+                                    'line_amount': {
+                                        'description': 'Total line amount (quantity × unit price)',
+                                        'type': 'array'
+                                    },
+                                    'line_note': {
+                                        'description': 'Custom notes entry for each line item',
+                                        'type': 'array'
+                                    },
+                                    'item_code': {
+                                        'description': 'Item code, SKU, or product ID',
+                                        'type': 'array'
+                                    },
+                                    'quantity': {
+                                        'description': 'Quantity ordered',
+                                        'type': 'array'
+                                    },
+                                    'unit_of_measure': {
+                                        'description': 'Unit of measure (e.g., EA, HR, BOX)',
+                                        'type': 'array'
+                                    },
+                                    'unit_price': {
+                                        'description': 'Price per unit',
+                                        'type': 'array'
+                                    },
+                                    'tax_amount': {
+                                        'description': 'Tax amount for this line',
+                                        'type': 'array'
+                                    }
+                                }
+                            }
                         }
-                    ]
+                    }
                 }
             ) INTO v_extracted_json;
             
@@ -357,30 +373,30 @@ BEGIN
                 v_json:invoice_number::VARCHAR,
                 TRY_TO_DATE(v_json:invoice_date::VARCHAR),
                 TRY_TO_DATE(v_json:due_date::VARCHAR),
-                v_json:vendor.name::VARCHAR,
-                v_json:vendor.address::VARCHAR,
-                v_json:vendor.city::VARCHAR,
-                v_json:vendor.state::VARCHAR,
-                v_json:vendor.zip::VARCHAR,
-                v_json:vendor.country::VARCHAR,
-                v_json:vendor.phone::VARCHAR,
-                v_json:vendor.email::VARCHAR,
-                v_json:vendor.tax_id::VARCHAR,
-                v_json:customer.name::VARCHAR,
-                v_json:customer.address::VARCHAR,
-                v_json:customer.city::VARCHAR,
-                v_json:customer.state::VARCHAR,
-                v_json:customer.zip::VARCHAR,
-                v_json:customer.country::VARCHAR,
-                v_json:customer.phone::VARCHAR,
-                v_json:customer.email::VARCHAR,
-                TRY_TO_DECIMAL(v_json:financial.subtotal, 18, 2),
-                TRY_TO_DECIMAL(v_json:financial.tax_amount, 18, 2),
-                TRY_TO_DECIMAL(v_json:financial.tax_rate, 5, 2),
-                TRY_TO_DECIMAL(v_json:financial.shipping_amount, 18, 2),
-                TRY_TO_DECIMAL(v_json:financial.discount_amount, 18, 2),
-                TRY_TO_DECIMAL(v_json:financial.total_amount, 18, 2),
-                COALESCE(v_json:financial.currency::VARCHAR, 'USD'),
+                v_json:vendor::VARCHAR,
+                v_json:vendor_address::VARCHAR,
+                NULL as vendor_city,
+                NULL as vendor_state,
+                NULL as vendor_zip,
+                NULL as vendor_country,
+                v_json:vendor_phone::VARCHAR,
+                v_json:vendor_email::VARCHAR,
+                v_json:vendor_tax_id::VARCHAR,
+                v_json:customer::VARCHAR,
+                v_json:customer_address::VARCHAR,
+                NULL as customer_city,
+                NULL as customer_state,
+                NULL as customer_zip,
+                NULL as customer_country,
+                v_json:customer_phone::VARCHAR,
+                v_json:customer_email::VARCHAR,
+                TRY_TO_DECIMAL(v_json:subtotal, 18, 2),
+                TRY_TO_DECIMAL(v_json:tax_amount, 18, 2),
+                TRY_TO_DECIMAL(v_json:tax_rate, 5, 2),
+                TRY_TO_DECIMAL(v_json:shipping_amount, 18, 2),
+                TRY_TO_DECIMAL(v_json:discount_amount, 18, 2),
+                TRY_TO_DECIMAL(v_json:total_amount, 18, 2),
+                COALESCE(v_json:currency::VARCHAR, 'USD'),
                 v_json:payment_terms::VARCHAR,
                 v_json:po_number::VARCHAR,
                 v_json:notes::VARCHAR;
@@ -389,6 +405,7 @@ BEGIN
             v_invoice_id := (SELECT MAX(invoice_id) FROM invoice WHERE extraction_id = v_extraction_id);
             
             -- Insert line items into invoice_detail table
+            -- Line items are in columnar format (arrays), so we reconstruct them by index
             INSERT INTO invoice_detail (
                 invoice_id,
                 line_number,
@@ -398,27 +415,21 @@ BEGIN
                 unit_of_measure,
                 unit_price,
                 line_amount,
-                discount_percent,
-                discount_amount,
                 tax_amount,
-                category,
                 notes
             )
             SELECT
                 v_invoice_id,
-                line_item.value:line_number::NUMBER,
-                line_item.value:description::VARCHAR,
-                line_item.value:item_code::VARCHAR,
-                TRY_TO_DECIMAL(line_item.value:quantity, 18, 4),
-                line_item.value:unit_of_measure::VARCHAR,
-                TRY_TO_DECIMAL(line_item.value:unit_price, 18, 4),
-                TRY_TO_DECIMAL(line_item.value:line_amount, 18, 2),
-                TRY_TO_DECIMAL(line_item.value:discount_percent, 5, 2),
-                TRY_TO_DECIMAL(line_item.value:discount_amount, 18, 2),
-                TRY_TO_DECIMAL(line_item.value:tax_amount, 18, 2),
-                line_item.value:category::VARCHAR,
-                line_item.value:notes::VARCHAR
-            FROM TABLE(FLATTEN(v_json:line_items)) line_item;
+                TRY_TO_NUMBER(v_json:line_items.line_number[idx.index]::VARCHAR) as line_number,
+                v_json:line_items.line_description[idx.index]::VARCHAR as item_description,
+                v_json:line_items.item_code[idx.index]::VARCHAR as item_code,
+                TRY_TO_DECIMAL(v_json:line_items.quantity[idx.index]::VARCHAR, 18, 4) as quantity,
+                v_json:line_items.unit_of_measure[idx.index]::VARCHAR as unit_of_measure,
+                TRY_TO_DECIMAL(v_json:line_items.unit_price[idx.index]::VARCHAR, 18, 4) as unit_price,
+                TRY_TO_DECIMAL(v_json:line_items.line_amount[idx.index]::VARCHAR, 18, 2) as line_amount,
+                TRY_TO_DECIMAL(v_json:line_items.tax_amount[idx.index]::VARCHAR, 18, 2) as tax_amount,
+                v_json:line_items.line_note[idx.index]::VARCHAR as notes
+            FROM TABLE(FLATTEN(v_json:line_items.line_number)) idx;
             
         EXCEPTION
             WHEN OTHER THEN

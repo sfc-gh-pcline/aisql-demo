@@ -346,9 +346,9 @@ WHERE processing_status = 'ERROR';
 
 ```sql
 -- Reset stream if needed
+-- Note: Directory streams cannot use APPEND_ONLY = TRUE
 CREATE OR REPLACE STREAM invoice_stage_stream 
-ON STAGE invoice_stage
-APPEND_ONLY = TRUE;
+ON STAGE invoice_stage;
 ```
 
 ### Common Issues

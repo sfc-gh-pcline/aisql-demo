@@ -99,21 +99,40 @@ SELECT
     'AI Extraction Test' as test_name,
     RELATIVE_PATH as file_name,
     SNOWFLAKE.CORTEX.AI_EXTRACT(
-        BUILD_SCOPED_FILE_URL(@invoice_stage, RELATIVE_PATH),
-        {
-            'invoice_number': 'Invoice number',
-            'invoice_date': 'Invoice date',
-            'vendor': {'name': 'Vendor name'},
-            'customer': {'name': 'Customer name'},
-            'financial': {'total_amount': 'Total amount'},
-            'line_items': [
-                {
-                    'description': 'Item description',
-                    'quantity': 'Quantity',
-                    'unit_price': 'Unit price',
-                    'line_amount': 'Line total'
+        file => TO_FILE(@invoice_stage, RELATIVE_PATH),
+        responseFormat => {
+            'schema': {
+                'type': 'object',
+                'properties': {
+                    'invoice_number': 'Invoice number',
+                    'invoice_date': 'Invoice date',
+                    'vendor': 'Vendor name',
+                    'customer': 'Customer name',
+                    'total_amount': 'Total amount',
+                    'line_items': {
+                        'description': 'Invoice line item details',
+                        'type': 'object',
+                        'properties': {
+                            'line_description': {
+                                'description': 'Item description',
+                                'type': 'array'
+                            },
+                            'quantity': {
+                                'description': 'Quantity',
+                                'type': 'array'
+                            },
+                            'unit_price': {
+                                'description': 'Unit price',
+                                'type': 'array'
+                            },
+                            'line_amount': {
+                                'description': 'Line total',
+                                'type': 'array'
+                            }
+                        }
+                    }
                 }
-            ]
+            }
         }
     ) as extracted_sample
 FROM DIRECTORY(@invoice_stage)
@@ -564,9 +583,9 @@ TRUNCATE TABLE invoice;
 TRUNCATE TABLE raw_json;
 
 -- Recreate streams
+-- Note: Directory streams cannot use APPEND_ONLY = TRUE
 CREATE OR REPLACE STREAM invoice_stage_stream 
-ON STAGE invoice_stage
-APPEND_ONLY = TRUE;
+ON STAGE invoice_stage;
 
 CREATE OR REPLACE STREAM raw_json_stream 
 ON TABLE raw_json
