@@ -29,28 +29,22 @@ CREATE OR REPLACE STAGE invoice_stage
 -- PUT file:///path/to/docs/MB66680464.pdf @invoice_stage AUTO_COMPRESS=FALSE;
 
 -- ============================================================================
--- STEP 3: CREATE DIRECTORY TABLE TO TRACK FILES
--- ============================================================================
-
--- Directory table to monitor files in the stage
-CREATE OR REPLACE TABLE invoice_stage_directory AS
-SELECT * FROM DIRECTORY(@invoice_stage);
-
--- Refresh directory table (initially empty until files are uploaded)
--- ALTER STAGE invoice_stage REFRESH;
-
--- ============================================================================
--- STEP 4: CREATE STREAM ON DIRECTORY TABLE
+-- STEP 3: CREATE STREAM ON STAGE DIRECTORY
 -- ============================================================================
 
 -- Stream to capture new files added to the stage
+-- Note: The stage already has an implicit directory table (DIRECTORY = ENABLE = TRUE)
+-- We can create a stream directly on the stage to monitor file changes
 CREATE OR REPLACE STREAM invoice_stage_stream 
-ON TABLE invoice_stage_directory
+ON STAGE invoice_stage
 APPEND_ONLY = TRUE
 COMMENT = 'Stream to track new PDF files in invoice stage';
 
+-- Refresh directory when files are uploaded
+-- ALTER STAGE invoice_stage REFRESH;
+
 -- ============================================================================
--- STEP 5: CREATE RAW_JSON TABLE
+-- STEP 4: CREATE RAW_JSON TABLE
 -- ============================================================================
 
 -- Table to store raw JSON extraction results from AI_EXTRACT
@@ -67,7 +61,7 @@ CREATE OR REPLACE TABLE raw_json (
 );
 
 -- ============================================================================
--- STEP 6: CREATE STREAM ON RAW_JSON TABLE
+-- STEP 5: CREATE STREAM ON RAW_JSON TABLE
 -- ============================================================================
 
 -- Stream to capture new extractions that need to be parsed
@@ -77,7 +71,7 @@ APPEND_ONLY = TRUE
 COMMENT = 'Stream to track new JSON extractions for parsing';
 
 -- ============================================================================
--- STEP 7: CREATE INVOICE AND INVOICE_DETAIL TABLES
+-- STEP 6: CREATE INVOICE AND INVOICE_DETAIL TABLES
 -- ============================================================================
 
 -- Main invoice header table
@@ -159,7 +153,7 @@ CREATE OR REPLACE TABLE invoice_detail (
 );
 
 -- ============================================================================
--- STEP 8: CREATE TASK TO EXTRACT PDFs USING AI_EXTRACT
+-- STEP 7: CREATE TASK TO EXTRACT PDFs USING AI_EXTRACT
 -- ============================================================================
 
 -- Task 1: Extract PDF content to JSON using AI_EXTRACT
@@ -298,7 +292,7 @@ BEGIN
 END;
 
 -- ============================================================================
--- STEP 9: CREATE TASK TO PARSE JSON INTO INVOICE TABLES
+-- STEP 8: CREATE TASK TO PARSE JSON INTO INVOICE TABLES
 -- ============================================================================
 
 -- Task 2: Parse JSON from raw_json into invoice and invoice_detail tables
@@ -435,7 +429,7 @@ BEGIN
 END;
 
 -- ============================================================================
--- STEP 10: ENABLE TASK EXECUTION
+-- STEP 9: ENABLE TASK EXECUTION
 -- ============================================================================
 
 -- Resume tasks (they start in suspended state)
@@ -444,7 +438,7 @@ END;
 -- ALTER TASK task_extract_invoices RESUME;
 
 -- ============================================================================
--- STEP 11: MONITORING AND UTILITY QUERIES
+-- STEP 10: MONITORING AND UTILITY QUERIES
 -- ============================================================================
 
 -- View to monitor pipeline status
@@ -567,7 +561,6 @@ GROUP BY
 -- DROP TABLE IF EXISTS invoice_detail;
 -- DROP TABLE IF EXISTS invoice;
 -- DROP TABLE IF EXISTS raw_json;
--- DROP TABLE IF EXISTS invoice_stage_directory;
 -- DROP STAGE IF EXISTS invoice_stage;
 -- DROP VIEW IF EXISTS pipeline_monitoring;
 -- DROP VIEW IF EXISTS invoice_summary;

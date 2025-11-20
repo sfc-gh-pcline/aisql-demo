@@ -48,9 +48,8 @@ This proof-of-concept demonstrates an automated invoice processing pipeline usin
 ## Components
 
 ### 1. **Stage and Monitoring**
-- `invoice_stage`: Internal stage for PDF storage
-- `invoice_stage_directory`: Directory table tracking files
-- `invoice_stage_stream`: Stream to detect new files
+- `invoice_stage`: Internal stage for PDF storage (with implicit directory table enabled)
+- `invoice_stage_stream`: Stream on stage to detect new files
 
 ### 2. **Extraction Layer**
 - `raw_json`: Stores AI-extracted JSON data
@@ -206,12 +205,8 @@ USE SCHEMA invoice_pipeline;
 -- Refresh the stage to detect new files
 ALTER STAGE invoice_stage REFRESH;
 
--- Update directory table
-CREATE OR REPLACE TABLE invoice_stage_directory AS 
+-- Verify files are detected using the implicit directory table
 SELECT * FROM DIRECTORY(@invoice_stage);
-
--- Verify files are detected
-SELECT * FROM invoice_stage_directory;
 ```
 
 ### Step 4: Resume Tasks
@@ -352,7 +347,7 @@ WHERE processing_status = 'ERROR';
 ```sql
 -- Reset stream if needed
 CREATE OR REPLACE STREAM invoice_stage_stream 
-ON TABLE invoice_stage_directory
+ON STAGE invoice_stage
 APPEND_ONLY = TRUE;
 ```
 
@@ -427,7 +422,6 @@ DROP VIEW IF EXISTS pipeline_monitoring;
 DROP TABLE IF EXISTS invoice_detail;
 DROP TABLE IF EXISTS invoice;
 DROP TABLE IF EXISTS raw_json;
-DROP TABLE IF EXISTS invoice_stage_directory;
 DROP STAGE IF EXISTS invoice_stage;
 DROP SCHEMA IF EXISTS invoice_pipeline;
 DROP DATABASE IF EXISTS invoice_processing_poc;

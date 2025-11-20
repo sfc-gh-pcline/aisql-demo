@@ -22,16 +22,14 @@ CREATE OR REPLACE STAGE invoice_stage
     COMMENT = 'Stage for storing PDF invoice files';
 
 -- ============================================================================
--- STEP 3: CREATE DIRECTORY TABLE AND STREAM
+-- STEP 3: CREATE STREAM ON STAGE DIRECTORY
 -- ============================================================================
 
--- Directory table to monitor files in the stage
-CREATE OR REPLACE TABLE invoice_stage_directory AS
-SELECT * FROM DIRECTORY(@invoice_stage);
-
 -- Stream to capture new files added to the stage
+-- Note: The stage already has an implicit directory table (DIRECTORY = ENABLE = TRUE)
+-- We can create a stream directly on the stage to monitor file changes
 CREATE OR REPLACE STREAM invoice_stage_stream 
-ON TABLE invoice_stage_directory
+ON STAGE invoice_stage
 APPEND_ONLY = TRUE
 COMMENT = 'Stream to track new PDF files in invoice stage';
 
@@ -428,19 +426,15 @@ ORDER BY i.invoice_number, d.line_number;
 -- STEP 9: HELPER PROCEDURES
 -- ============================================================================
 
--- Procedure to manually refresh directory table and process files
+-- Procedure to manually refresh directory and process files
 CREATE OR REPLACE PROCEDURE refresh_and_process()
 RETURNS STRING
 LANGUAGE SQL
 AS
 $$
 BEGIN
-    -- Refresh the stage directory
+    -- Refresh the stage directory (updates the implicit directory table)
     ALTER STAGE invoice_stage REFRESH;
-    
-    -- Update directory table
-    CREATE OR REPLACE TABLE invoice_stage_directory AS
-    SELECT * FROM DIRECTORY(@invoice_stage);
     
     -- Execute tasks manually (for testing)
     EXECUTE TASK task_extract_invoices;
@@ -493,10 +487,7 @@ $$;
 -- ALTER STAGE invoice_stage REFRESH;
 -- SELECT * FROM DIRECTORY(@invoice_stage);
 
--- 3. Manually update directory table
--- CREATE OR REPLACE TABLE invoice_stage_directory AS SELECT * FROM DIRECTORY(@invoice_stage);
-
--- 4. Check stream for new files
+-- 3. Check stream for new files
 -- SELECT * FROM invoice_stage_stream;
 
 -- 5. Manually execute extraction task
@@ -567,7 +558,6 @@ DROP VIEW IF EXISTS pipeline_monitoring;
 DROP TABLE IF EXISTS invoice_detail;
 DROP TABLE IF EXISTS invoice;
 DROP TABLE IF EXISTS raw_json;
-DROP TABLE IF EXISTS invoice_stage_directory;
 DROP STAGE IF EXISTS invoice_stage;
 DROP SCHEMA IF EXISTS invoice_pipeline;
 DROP DATABASE IF EXISTS invoice_processing_poc;

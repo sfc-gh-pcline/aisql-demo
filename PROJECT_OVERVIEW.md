@@ -162,8 +162,9 @@ The AI extraction produces JSON with this structure:
 
 ### Database Schema
 
-**invoice_stage_directory**
-- Tracks files in the stage
+**invoice_stage (with implicit directory table)**
+- Internal stage for PDF storage
+- Directory table automatically maintained by Snowflake
 - Monitored by stream
 
 **raw_json**

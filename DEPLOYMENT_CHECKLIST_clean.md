@@ -91,7 +91,6 @@ Use this checklist to deploy the Snowflake AI Invoice Processing Pipeline step-b
   USE SCHEMA invoice_pipeline;
   SHOW TABLES;
   ```
-  - [ ] invoice_stage_directory
   - [ ] raw_json
   - [ ] invoice
   - [ ] invoice_detail

@@ -20,7 +20,7 @@ SELECT 'Tables' as object_type, COUNT(*) as count
 FROM INFORMATION_SCHEMA.TABLES 
 WHERE TABLE_SCHEMA = 'INVOICE_PIPELINE'
   AND TABLE_TYPE = 'BASE TABLE';
--- Expected: 4 tables (invoice_stage_directory, raw_json, invoice, invoice_detail)
+-- Expected: 3 tables (raw_json, invoice, invoice_detail)
 
 -- Check Views
 SELECT 'Views' as object_type, COUNT(*) as count 
@@ -449,7 +449,7 @@ SELECT
     i.invoice_id,
     i.invoice_number,
     COUNT(d.invoice_detail_id) as line_items
-FROM invoice_stage_directory sd
+FROM DIRECTORY(@invoice_stage) sd
 LEFT JOIN raw_json r ON sd.RELATIVE_PATH = r.file_name
 LEFT JOIN invoice i ON r.extraction_id = i.extraction_id
 LEFT JOIN invoice_detail d ON i.invoice_id = d.invoice_id
@@ -562,11 +562,10 @@ SELECT '-- Uncomment these commands to reset the pipeline' as warning;
 TRUNCATE TABLE invoice_detail;
 TRUNCATE TABLE invoice;
 TRUNCATE TABLE raw_json;
-TRUNCATE TABLE invoice_stage_directory;
 
 -- Recreate streams
 CREATE OR REPLACE STREAM invoice_stage_stream 
-ON TABLE invoice_stage_directory
+ON STAGE invoice_stage
 APPEND_ONLY = TRUE;
 
 CREATE OR REPLACE STREAM raw_json_stream 
@@ -587,7 +586,7 @@ SELECT '=== FINAL VALIDATION SUMMARY ===' as test_section;
 SELECT 
     'Pipeline Health Check' as report_name,
     CURRENT_TIMESTAMP() as report_time,
-    (SELECT COUNT(*) FROM invoice_stage_directory WHERE RELATIVE_PATH ILIKE '%.pdf') as total_files,
+    (SELECT COUNT(*) FROM DIRECTORY(@invoice_stage) WHERE RELATIVE_PATH ILIKE '%.pdf') as total_files,
     (SELECT COUNT(*) FROM raw_json) as total_extractions,
     (SELECT COUNT(*) FROM raw_json WHERE processing_status = 'SUCCESS') as successful_extractions,
     (SELECT COUNT(*) FROM raw_json WHERE processing_status = 'ERROR') as failed_extractions,
