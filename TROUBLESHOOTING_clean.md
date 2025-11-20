@@ -68,11 +68,7 @@ FROM invoice_detail;
 -- Solution A: Refresh the stage
 ALTER STAGE invoice_stage REFRESH;
 
--- Solution B: Recreate directory table
-CREATE OR REPLACE TABLE invoice_stage_directory AS 
-SELECT * FROM DIRECTORY(@invoice_stage);
-
--- Solution C: Verify files were uploaded
+-- Solution B: Verify files were uploaded
 -- Check using Snowflake UI: Data → Stages → invoice_stage
 -- Or upload files again:
 -- PUT file:///path/to/file.pdf @invoice_stage AUTO_COMPRESS=FALSE;
@@ -550,8 +546,8 @@ SELECT
     SYSTEM$STREAM_HAS_DATA('invoice_stage_stream') as has_data,
     (SELECT COUNT(*) FROM invoice_stage_stream) as record_count;
 
--- Check base table
-SELECT COUNT(*) FROM invoice_stage_directory;
+-- Check files in stage directory
+SELECT COUNT(*) FROM DIRECTORY(@invoice_stage);
 ```
 
 **Solutions:**
@@ -559,7 +555,7 @@ SELECT COUNT(*) FROM invoice_stage_directory;
 ```sql
 -- Solution A: Recreate the stream
 CREATE OR REPLACE STREAM invoice_stage_stream 
-ON TABLE invoice_stage_directory
+ON STAGE invoice_stage
 APPEND_ONLY = TRUE;
 
 -- Solution B: Check if stream was consumed
@@ -658,15 +654,13 @@ ALTER TASK task_parse_json_to_tables SUSPEND;
 TRUNCATE TABLE invoice_detail;
 TRUNCATE TABLE invoice;
 TRUNCATE TABLE raw_json;
-TRUNCATE TABLE invoice_stage_directory;
 
 -- Recreate streams
-CREATE OR REPLACE STREAM invoice_stage_stream ON TABLE invoice_stage_directory APPEND_ONLY = TRUE;
+CREATE OR REPLACE STREAM invoice_stage_stream ON STAGE invoice_stage APPEND_ONLY = TRUE;
 CREATE OR REPLACE STREAM raw_json_stream ON TABLE raw_json APPEND_ONLY = TRUE;
 
 -- Refresh stage
 ALTER STAGE invoice_stage REFRESH;
-CREATE OR REPLACE TABLE invoice_stage_directory AS SELECT * FROM DIRECTORY(@invoice_stage);
 
 -- Start fresh
 CALL refresh_and_process();
