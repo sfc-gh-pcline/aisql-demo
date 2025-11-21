@@ -1,497 +1,447 @@
-# 🚀 Snowflake AI Invoice Processing Pipeline - Complete POC
+# Snowflake Invoice Processing - AI Powered Solutions
 
-## Welcome!
+This repository contains two complementary approaches to invoice processing using Snowflake's Cortex AI capabilities.
 
-This repository contains a **complete, production-ready** proof-of-concept for automated invoice processing using **Snowflake Cortex AI**. The solution extracts structured data from PDF invoices using AI and processes them through an automated pipeline built with Snowflake Streams and Tasks.
+## Project Structure
+
+```
+aisql-demo/
+├── aiextract/          # Structured data extraction pipeline
+│   ├── snowflake_invoice_pipeline_v2.sql
+│   ├── snowflake_invoice_pipeline.sql
+│   ├── AI_EXTRACT_EXAMPLES.sql
+│   ├── testing_validation.sql
+│   └── Documentation...
+│
+├── search/             # Search and conversational AI pipeline
+│   ├── invoice_search_pipeline.sql
+│   ├── README.md
+│   └── QUICK_START.md
+│
+└── docs/              # Sample invoice PDFs
+    ├── MB66680464.pdf
+    └── B20277431.pdf
+```
+
+## Two Approaches
+
+### 📊 aiextract - Structured Data Extraction
+
+**Purpose:** Extract structured data from invoices into relational tables
+
+**Best for:**
+- ETL and data warehousing
+- Reporting and analytics
+- Integration with existing systems
+- Structured queries and aggregations
+
+**Technology:**
+- `SNOWFLAKE.CORTEX.AI_EXTRACT` - Schema-driven extraction
+- Custom response format with predefined fields
+- Normalized tables (invoice header + line items)
+
+**Output:**
+```
+invoice table           invoice_detail table
+├── invoice_number     ├── line_description
+├── vendor_name        ├── quantity
+├── total_amount       ├── unit_price
+└── ...                └── ...
+```
+
+[📖 Full Documentation →](./aiextract/README.md)
 
 ---
 
-## 📦 What's Included
+### 🔍 search - Search and Conversational AI
 
-This POC includes everything you need to deploy and run an AI-powered invoice processing pipeline:
+**Purpose:** Enable full-text search and natural language queries on invoices
 
-### Core Implementation Files
+**Best for:**
+- Finding invoices by content
+- Ad-hoc exploratory queries
+- Natural language questions
+- Conversational interfaces
 
-| File | Description | Use When |
-|------|-------------|----------|
-| **snowflake_invoice_pipeline_v2.sql** | Main implementation (RECOMMENDED) | Deploy the pipeline |
-| **snowflake_invoice_pipeline.sql** | Alternative version with detailed comments | Learn the implementation |
-| **testing_validation.sql** | 40+ comprehensive tests | Validate the deployment |
-| **AI_EXTRACT_EXAMPLES.sql** | AI_EXTRACT function examples | Learn how AI_EXTRACT works |
+**Technology:**
+- `SNOWFLAKE.CORTEX.PARSE_DOCUMENT` - Layout-aware parsing
+- Cortex Search Service - Semantic search
+- Semantic Views - Schema with synonyms
+- Cortex Agent - Conversational AI
 
-### Documentation Files
+**Output:**
+```
+Conversational Interface
+        ↓
+┌───────────────────────┐
+│   Cortex Agent        │
+└───────┬───────────────┘
+        ├─→ Search Service (full-text)
+        └─→ Semantic View (structured)
+```
 
-| File | Description | Use When |
-|------|-------------|----------|
-| **QUICK_START.md** | 5-minute setup guide | Get started immediately |
-| **README_INVOICE_PIPELINE.md** | Complete technical documentation | Need detailed information |
-| **TROUBLESHOOTING.md** | Problem-solving guide | Encountering issues |
-| **DEPLOYMENT_CHECKLIST.md** | Step-by-step deployment guide | Deploying to production |
-| **PROJECT_OVERVIEW.md** | Architecture and overview | Understanding the solution |
-| **README.md** | This file - Start here! | First time visitor |
-
-### Sample Data
-
-| File | Description |
-|------|-------------|
-| **docs/MB66680464.pdf** | Sample invoice for testing |
+[📖 Full Documentation →](./search/README.md)
 
 ---
 
-## 🎯 What This Pipeline Does
+## Quick Comparison
 
-```
-PDF Invoices → AI Extraction → Structured Data → Normalized Tables
-```
+| Feature | aiextract | search |
+|---------|-----------|--------|
+| **Extraction** | AI_EXTRACT | PARSE_DOCUMENT |
+| **Mode** | Structured schema | Layout-aware |
+| **Output** | Normalized tables | Full text + metadata |
+| **Query Style** | SQL only | SQL + Natural language |
+| **Search** | ❌ | ✅ Cortex Search |
+| **Agent** | ❌ | ✅ Cortex Agent |
+| **Best for** | Data warehousing | Search & exploration |
+| **Integration** | Easy SQL joins | Conversational UI |
 
-1. **Monitors** a Snowflake stage for new PDF invoice files
-2. **Extracts** invoice data using Snowflake Cortex AI (LLM-powered)
-3. **Stores** raw JSON extraction results with metadata
-4. **Parses** JSON into normalized relational tables
-5. **Provides** monitoring views and analytics capabilities
+## Which One Should You Use?
 
-### Output Tables
+### Use **aiextract** if you need:
+- ✅ Structured data in relational tables
+- ✅ Integration with BI tools
+- ✅ Predefined schema and fields
+- ✅ Traditional SQL queries
+- ✅ Data validation and quality checks
 
-**invoice** - Invoice header information
-- Invoice number, dates, vendor/customer info, financial totals
+### Use **search** if you need:
+- ✅ Full-text search capabilities
+- ✅ Natural language queries
+- ✅ Conversational interfaces
+- ✅ Exploratory analysis
+- ✅ Finding documents by content
 
-**invoice_detail** - Line items
-- Item descriptions, quantities, prices, amounts
+### Use **both** for:
+- ✅ Complete invoice processing solution
+- ✅ Structured data + search
+- ✅ Conversational AI with structured queries
+- ✅ Best of both worlds
 
----
+## Getting Started
 
-## ⚡ Quick Start (5 Minutes)
-
-### 1. Deploy the Pipeline
-
-```sql
--- Copy and execute: snowflake_invoice_pipeline_v2.sql in Snowflake
-```
-
-### 2. Upload a Test Invoice
-
-```sql
--- Using SnowSQL
-PUT file:///Users/pcline/My\ Drive/Accounts/Grayson/Inspire/Document\ Parsing/docs/MB66680464.pdf 
-    @invoice_processing_poc.invoice_pipeline.invoice_stage 
-    AUTO_COMPRESS=FALSE;
-```
-
-### 3. Process It
+### Option 1: Structured Data Extraction (aiextract)
 
 ```sql
-USE DATABASE invoice_processing_poc;
-USE SCHEMA invoice_pipeline;
+-- Run the aiextract pipeline
+@aiextract/snowflake_invoice_pipeline_v2.sql
 
+-- Upload invoices
+PUT file:///path/to/invoices/*.pdf @invoice_stage AUTO_COMPRESS=FALSE;
+
+-- Process
 CALL refresh_and_process();
+
+-- Query
+SELECT * FROM invoice WHERE vendor_name = 'Acme Corp';
 ```
 
-### 4. View Results
+[📖 aiextract Quick Start →](./aiextract/QUICK_START.md)
+
+---
+
+### Option 2: Search & Conversational AI (search)
 
 ```sql
--- See the processing status
-SELECT * FROM pipeline_monitoring;
+-- Run the search pipeline
+@search/invoice_search_pipeline.sql
 
--- See parsed invoices
-SELECT * FROM invoice_summary;
+-- Upload invoices
+PUT file:///path/to/invoices/*.pdf @invoice_search_stage AUTO_COMPRESS=FALSE;
 
--- See line items
-SELECT * FROM invoice_detail_view;
+-- Process
+CALL refresh_and_parse();
+
+-- Search
+SELECT * FROM TABLE(invoice_search_service.SEARCH('medical supplies', 10));
+
+-- Ask questions
+SELECT SNOWFLAKE.CORTEX.COMPLETE_AGENT(
+    'invoice_agent',
+    'Show me all invoices from last month'
+);
 ```
 
-**Done!** Your first invoice is processed. 🎉
+[📖 search Quick Start →](./search/QUICK_START.md)
 
 ---
 
-## 📖 Documentation Roadmap
+### Option 3: Both (Recommended for Production)
 
-### 👉 First Time Here?
+The **search** project's semantic view and agent work with the **aiextract** project's tables, giving you:
 
-Start with this order:
-
-1. **README.md** (this file) ← You are here
-2. **QUICK_START.md** - Get it running in 5 minutes
-3. **PROJECT_OVERVIEW.md** - Understand the architecture
-4. Test with your own invoices
-
-### 🔧 Ready to Deploy?
-
-Follow this path:
-
-1. **DEPLOYMENT_CHECKLIST.md** - Step-by-step deployment
-2. **testing_validation.sql** - Validate everything works
-3. **README_INVOICE_PIPELINE.md** - Detailed configuration
-4. **TROUBLESHOOTING.md** - Bookmark for issues
-
-### 🏭 Going to Production?
-
-Read these carefully:
-
-1. **README_INVOICE_PIPELINE.md** - Full technical details
-2. **DEPLOYMENT_CHECKLIST.md** - Production deployment steps
-3. **TROUBLESHOOTING.md** - Common issues and solutions
-4. **PROJECT_OVERVIEW.md** - Performance, costs, security
-
----
-
-## 🏗️ Architecture Overview
-
-```
-┌──────────────┐
-│ PDF Files    │ Upload PDFs to Snowflake stage
-└──────┬───────┘
-       │
-       ▼
-┌──────────────────────┐
-│ Directory Stream     │ Detects new files
-└──────┬───────────────┘
-       │
-       ▼
-┌──────────────────────────────────────┐
-│ Task 1: AI Extraction                │
-│ • CORTEX.AI_EXTRACT function         │
-│ • Schema-driven extraction           │
-│ • Converts PDF → Structured JSON     │
-└──────┬───────────────────────────────┘
-       │
-       ▼
-┌──────────────────────┐
-│ raw_json Table       │ Stores extracted JSON + metadata
-└──────┬───────────────┘
-       │
-       ▼
-┌──────────────────────┐
-│ JSON Stream          │ Detects new extractions
-└──────┬───────────────┘
-       │
-       ▼
-┌──────────────────────────────────────┐
-│ Task 2: JSON Parser                  │
-│ • Extracts invoice header            │
-│ • Flattens line items array          │
-│ • Inserts into normalized tables     │
-└──────┬───────────────────────────────┘
-       │
-       ├─────────────────┐
-       ▼                 ▼
-┌─────────────┐   ┌──────────────────┐
-│ invoice     │   │ invoice_detail   │
-│ (Header)    │   │ (Line Items)     │
-└─────────────┘   └──────────────────┘
-```
-
----
-
-## ✨ Key Features
-
-### 🤖 AI-Powered Extraction with AI_EXTRACT
-- Uses **SNOWFLAKE.CORTEX.AI_EXTRACT** function
-- Schema-driven extraction (no prompt engineering needed)
-- No external APIs - runs entirely in Snowflake
-- Handles various invoice formats automatically
-- Extracts vendor, customer, line items, totals
-
-### 🔄 Automated Processing
-- Stream-based real-time detection
-- Task-based workflow orchestration
-- Runs automatically every minute (configurable)
-
-### 📊 Structured Output
-- Normalized relational tables
-- Ready for SQL queries and analytics
-- Easy integration with BI tools
-
-### 🔍 Monitoring & Validation
-- Built-in pipeline monitoring views
-- End-to-end traceability
-- Error tracking and logging
-
-### 🛡️ Enterprise-Ready
-- Pure Snowflake implementation
-- Secure (no data leaves Snowflake)
-- Scalable architecture
-- Comprehensive error handling
-
----
-
-## 🧪 Testing
-
-Run the comprehensive test suite:
+1. **Structured data** in `invoice` and `invoice_detail` tables
+2. **Full-text search** via Cortex Search Service
+3. **Conversational queries** via Cortex Agent
 
 ```sql
--- Execute: testing_validation.sql
--- Includes 40+ tests covering:
--- ✅ Object creation
--- ✅ File upload and detection
--- ✅ AI extraction accuracy
--- ✅ JSON parsing correctness
--- ✅ Data quality validation
--- ✅ Performance metrics
--- ✅ End-to-end pipeline trace
+-- 1. Set up aiextract first
+@aiextract/snowflake_invoice_pipeline_v2.sql
+
+-- 2. Then set up search
+@search/invoice_search_pipeline.sql
+
+-- 3. Upload to both stages
+PUT file:///path/to/invoices/*.pdf @invoice_stage AUTO_COMPRESS=FALSE;
+PUT file:///path/to/invoices/*.pdf @invoice_search_stage AUTO_COMPRESS=FALSE;
+
+-- 4. Process both
+CALL invoice_pipeline.refresh_and_process();
+CALL invoice_search.refresh_and_parse();
+
+-- 5. Query using any method:
+-- SQL on structured data
+SELECT * FROM invoice_pipeline.invoice;
+
+-- Full-text search
+SELECT * FROM TABLE(invoice_search.invoice_search_service.SEARCH('term', 10));
+
+-- Natural language
+SELECT SNOWFLAKE.CORTEX.COMPLETE_AGENT('invoice_agent', 'your question');
 ```
 
----
+## Sample Invoices
 
-## 📊 What Gets Extracted
+The `docs/` folder contains sample invoices you can use for testing:
+- `MB66680464.pdf`
+- `B20277431.pdf`
 
-### Invoice Header
-- Invoice number, dates (invoice date, due date)
-- Vendor information (name, address, contact, tax ID)
-- Customer information (name, address, contact)
-- Financial totals (subtotal, tax, shipping, discounts, total)
-- Payment terms, PO number, notes
+These are real-world invoice formats that demonstrate the capabilities of both pipelines.
 
-### Line Items (Array)
-- Line number
-- Item description and code
-- Quantity and unit of measure
-- Unit price and line amount
-- Discounts and taxes
-- Category and notes
+## Architecture Overview
 
----
+### aiextract Architecture
 
-## 💰 Cost Estimates
-
-Approximate costs per invoice:
-
-- **AI Extraction**: $0.02 - $0.10 per invoice
-- **Warehouse Compute**: $0.01 - $0.05 per invoice
-- **Storage**: < $0.001 per invoice
-
-**Total: $0.03 - $0.15 per invoice**
-
-*Actual costs vary by region, invoice size, and configuration*
-
----
-
-## 🎓 Learning Path
-
-### Beginner
-1. Run QUICK_START.md
-2. Process sample invoice
-3. Query the results
-4. Understand what happened
-
-### Intermediate
-1. Review snowflake_invoice_pipeline_v2.sql
-2. Understand streams and tasks
-3. Customize JSON schema
-4. Test with your invoices
-
-### Advanced
-1. Optimize for your volume
-2. Add custom validations
-3. Integrate with downstream systems
-4. Implement advanced features
-
----
-
-## 🛠️ Customization
-
-### Common Customizations
-
-**1. Refine Extraction Schema**
-```sql
--- In task_extract_invoices, update field descriptions for better accuracy:
--- Make descriptions more specific and detailed
-'invoice_number': 'Invoice number typically found in upper right of document'
+```
+PDF → Stream → AI_EXTRACT → raw_json → Parse → invoice + invoice_detail
+                  ↓
+            (Structured schema)
 ```
 
-**2. Adjust Processing Frequency**
-```sql
-ALTER TASK task_extract_invoices SET SCHEDULE = '5 MINUTE';
+### search Architecture
+
+```
+PDF → Stream → PARSE_DOCUMENT → parsed_invoices
+                    ↓
+              (Full text)
+                    ↓
+         ┌──────────┴──────────┐
+         ↓                     ↓
+  Search Service      Semantic View
+         ↓                     ↓
+         └──────────┬──────────┘
+                    ↓
+            Cortex Agent
 ```
 
-**3. Modify JSON Schema**
-```sql
--- Update the JSON structure in the AI prompt
--- Then update INSERT statements in task_parse_json_to_tables
+### Combined Architecture
+
+```
+                PDF Files
+                    ↓
+        ┌───────────┴───────────┐
+        ↓                       ↓
+   aiextract               search
+        ↓                       ↓
+  Structured Tables      Full-text Index
+        ↓                       ↓
+        └───────────┬───────────┘
+                    ↓
+         Unified Query Interface
+    (SQL + Search + Conversational)
 ```
 
-**4. Add Validation Rules**
-```sql
--- Add to task_parse_json_to_tables
--- Example: Reject invoices over $10,000
-WHERE extracted_json:financial.total_amount::NUMBER <= 10000
-```
+## Key Technologies
 
----
+### Snowflake Cortex AI Functions
 
-## 🚨 Troubleshooting
+1. **AI_EXTRACT**
+   - Structured extraction with custom schema
+   - Used in: aiextract project
+   - Best for: Known fields and structured output
 
-### Quick Diagnostics
+2. **PARSE_DOCUMENT**
+   - Layout-aware document parsing
+   - Modes: LAYOUT, OCR
+   - Used in: search project
+   - Best for: Full-text extraction
 
-```sql
--- Is everything set up?
-SHOW DATABASES LIKE 'INVOICE_PROCESSING_POC';
-SHOW TABLES IN SCHEMA invoice_pipeline;
+### Snowflake Cortex Services
 
--- Any files uploaded?
-SELECT * FROM DIRECTORY(@invoice_stage);
+3. **Cortex Search Service**
+   - Semantic search on text data
+   - Used in: search project
+   - Best for: Finding documents by content
 
--- Any extractions completed?
-SELECT * FROM raw_json;
+4. **Semantic Views**
+   - Schema with descriptions and synonyms
+   - Used in: search project
+   - Best for: Natural language understanding
 
--- Any invoices created?
-SELECT * FROM invoice_summary;
+5. **Cortex Agent**
+   - Conversational AI interface
+   - Combines search + structured queries
+   - Used in: search project
+   - Best for: Natural language queries
 
--- Any errors?
-SELECT * FROM raw_json WHERE processing_status = 'ERROR';
-```
+## Common Use Cases
 
-**For detailed troubleshooting**: See `TROUBLESHOOTING.md`
-
----
-
-## 📈 Success Metrics
-
-After deployment, track:
-
-- **Accuracy Rate**: % of invoices extracted correctly
-- **Processing Time**: Average time per invoice
-- **Success Rate**: % of successful extractions
-- **Cost Per Invoice**: Total cost / # invoices
-- **Time Savings**: Manual entry time eliminated
-
----
-
-## 🔮 Potential Enhancements
-
-- [ ] Email integration (process from inbox)
-- [ ] Multi-language support
-- [ ] PO matching and validation
-- [ ] Approval workflow integration
-- [ ] OCR preprocessing for scanned docs
-- [ ] Confidence scoring
-- [ ] Dashboard visualizations
-- [ ] REST API endpoints
-- [ ] Duplicate detection
-- [ ] Anomaly detection (fraud prevention)
-
----
-
-## 📚 Resources
-
-### Included Documentation
-- 📘 `QUICK_START.md` - Fast setup guide
-- 📗 `README_INVOICE_PIPELINE.md` - Complete technical docs
-- 📙 `TROUBLESHOOTING.md` - Problem solving
-- 📕 `DEPLOYMENT_CHECKLIST.md` - Production deployment
-- 📔 `PROJECT_OVERVIEW.md` - Architecture overview
-
-### Snowflake Documentation
-- [Snowflake Cortex AI](https://docs.snowflake.com/en/user-guide/snowflake-cortex)
-- [Streams](https://docs.snowflake.com/en/user-guide/streams)
-- [Tasks](https://docs.snowflake.com/en/user-guide/tasks-intro)
-- [Stages](https://docs.snowflake.com/en/user-guide/data-load-internal-tutorial)
-
----
-
-## ✅ Pre-Deployment Checklist
-
-Before you start:
-
-- [ ] Snowflake account with Cortex AI enabled
-- [ ] Warehouse available (e.g., COMPUTE_WH)
-- [ ] Permissions to create databases and tasks
-- [ ] Sample PDF invoices for testing
-- [ ] Budget approval for AI function usage
-- [ ] Reviewed documentation (QUICK_START.md minimum)
-
----
-
-## 🎯 Next Steps
-
-### Option 1: Quick Test (5 minutes)
-1. Go to **QUICK_START.md**
-2. Follow the 4 steps
-3. See results immediately
-
-### Option 2: Full Deployment (30 minutes)
-1. Go to **DEPLOYMENT_CHECKLIST.md**
-2. Complete all steps
-3. Run comprehensive tests
-4. Enable automated processing
-
-### Option 3: Learn First (15 minutes)
-1. Read **PROJECT_OVERVIEW.md**
-2. Review **snowflake_invoice_pipeline_v2.sql**
-3. Understand architecture
-4. Then deploy
-
----
-
-## 📞 Support
-
-### Documentation
-All answers should be in the included documentation:
-- **Quick questions**: QUICK_START.md or TROUBLESHOOTING.md
-- **Technical details**: README_INVOICE_PIPELINE.md
-- **Architecture**: PROJECT_OVERVIEW.md
-
-### External Resources
-- **Snowflake Support**: https://support.snowflake.com/
-- **Snowflake Community**: https://community.snowflake.com/
-- **Snowflake Documentation**: https://docs.snowflake.com/
-
----
-
-## 🎉 Let's Get Started!
-
-Ready to process your first invoice with AI?
-
-👉 **Go to `QUICK_START.md` now!** 👈
-
-Or jump directly to deployment:
+### Use Case 1: Monthly Financial Reporting
+**Solution:** aiextract → BI tool integration
 
 ```sql
--- 1. Execute this file in Snowflake:
-snowflake_invoice_pipeline_v2.sql
-
--- 2. Upload a test PDF
--- 3. Run: CALL refresh_and_process();
--- 4. Query: SELECT * FROM invoice_summary;
+SELECT 
+    DATE_TRUNC('MONTH', invoice_date) as month,
+    SUM(total_amount) as total,
+    COUNT(*) as invoice_count
+FROM invoice_pipeline.invoice
+GROUP BY month;
 ```
 
----
+### Use Case 2: Find All Invoices Mentioning Specific Items
+**Solution:** search → Full-text search
 
-## 📋 File Summary
-
-```
-Project Files:
-├── README.md (this file)                      ← START HERE
-├── QUICK_START.md                             ← 5-min setup
-├── PROJECT_OVERVIEW.md                        ← Architecture
-├── README_INVOICE_PIPELINE.md                 ← Full docs
-├── TROUBLESHOOTING.md                         ← Issues? Look here
-├── DEPLOYMENT_CHECKLIST.md                    ← Production deployment
-├── snowflake_invoice_pipeline_v2.sql          ← Main script (USE THIS)
-├── snowflake_invoice_pipeline.sql             ← Alternative version
-├── testing_validation.sql                     ← Test suite
-├── AI_EXTRACT_EXAMPLES.sql                    ← AI_EXTRACT examples
-└── docs/
-    └── MB66680464.pdf                         ← Sample invoice
+```sql
+SELECT * FROM TABLE(
+    invoice_search.invoice_search_service.SEARCH(
+        'laptop computer equipment',
+        20
+    )
+);
 ```
 
+### Use Case 3: Expense Analysis by Vendor
+**Solution:** aiextract → Structured queries
+
+```sql
+SELECT 
+    vendor_name,
+    COUNT(*) as invoice_count,
+    SUM(total_amount) as total_spent
+FROM invoice_pipeline.invoice
+GROUP BY vendor_name
+ORDER BY total_spent DESC;
+```
+
+### Use Case 4: Ad-hoc Conversational Queries
+**Solution:** search → Cortex Agent
+
+```sql
+SELECT SNOWFLAKE.CORTEX.COMPLETE_AGENT(
+    'invoice_agent',
+    'What were our top 3 expenses last quarter?'
+);
+```
+
+## Requirements
+
+### Snowflake Account
+- Cortex AI features enabled
+- Enterprise edition or higher (for some features)
+- Supported region for Cortex AI
+
+### Permissions
+- CREATE DATABASE, SCHEMA, TABLE, VIEW
+- CREATE STAGE, STREAM, TASK
+- CREATE CORTEX SEARCH SERVICE
+- CREATE CORTEX AGENT
+- USAGE on WAREHOUSE
+
+### Warehouse
+- Minimum: SMALL
+- Recommended: MEDIUM for production
+- Can be adjusted based on volume
+
+## Best Practices
+
+### 1. Start with aiextract
+If you're new to invoice processing, start with the aiextract project to understand the data structure.
+
+### 2. Add search for Scale
+Once you have structured data, add the search project for powerful query capabilities.
+
+### 3. Use Consistent File Names
+Name your PDFs consistently: `invoice_vendor_YYYYMMDD.pdf`
+
+### 4. Monitor Both Pipelines
+- Check task execution history
+- Review processing success rates
+- Monitor search service performance
+
+### 5. Iterate on Schemas
+- Update AI_EXTRACT schema based on your invoice formats
+- Refine agent instructions based on common queries
+- Add synonyms to semantic view for better matching
+
+## Troubleshooting
+
+### Problem: Extraction/Parsing Failures
+
+**aiextract:**
+```sql
+SELECT * FROM invoice_pipeline.raw_json 
+WHERE processing_status = 'ERROR';
+```
+
+**search:**
+```sql
+SELECT * FROM invoice_search.parsed_invoices 
+WHERE processing_status != 'SUCCESS';
+```
+
+### Problem: Tasks Not Running
+
+```sql
+-- Check task status
+SHOW TASKS;
+
+-- Check execution history
+SELECT * FROM TABLE(INFORMATION_SCHEMA.TASK_HISTORY())
+WHERE name ILIKE '%invoice%'
+ORDER BY scheduled_time DESC;
+```
+
+### Problem: Search Not Working
+
+```sql
+-- Verify documents are indexed
+SELECT * FROM invoice_search.search_service_stats;
+
+-- Refresh search service
+ALTER CORTEX SEARCH SERVICE invoice_search.invoice_search_service REFRESH;
+```
+
+## Contributing
+
+When adding new features or improvements:
+
+1. Test with sample invoices first
+2. Update documentation
+3. Add examples to quick start guides
+4. Consider compatibility between projects
+
+## License
+
+[Add your license information here]
+
+## Support
+
+For questions or issues:
+1. Check the project-specific documentation
+2. Review troubleshooting sections
+3. Test with sample PDFs in docs/
+
 ---
 
-## 🏆 Success Stories
+## Quick Links
 
-Use this pipeline to:
-- **Eliminate 95%** of manual data entry
-- **Process invoices in seconds** instead of minutes
-- **Reduce errors** to near-zero
-- **Scale processing** from 10 to 10,000 invoices
-- **Enable real-time** AP automation
+- [aiextract Documentation](./aiextract/README.md)
+- [aiextract Quick Start](./aiextract/QUICK_START.md)
+- [search Documentation](./search/README.md)
+- [search Quick Start](./search/QUICK_START.md)
 
 ---
 
-**Built with ❤️ using Snowflake Cortex AI**
-
-*Production-Ready • Enterprise-Scale • Pure SQL Implementation*
-
----
-
-Questions? Start with **QUICK_START.md** →
+**Ready to process invoices with AI? Pick a project and get started! 🚀**
 

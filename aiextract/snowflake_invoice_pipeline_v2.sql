@@ -137,7 +137,7 @@ CREATE OR REPLACE TABLE invoice_detail (
 -- ============================================================================
 
 CREATE OR REPLACE TASK task_extract_invoices
-    WAREHOUSE = COMPUTE_WH
+    WAREHOUSE = SNOWFLAKE_INTELLIGENCE_WH
     SCHEDULE = '1 MINUTE'
     WHEN SYSTEM$STREAM_HAS_DATA('invoice_stage_stream')
 AS
@@ -153,9 +153,9 @@ SELECT
     s.RELATIVE_PATH as file_name,
     BUILD_SCOPED_FILE_URL(@invoice_stage, s.RELATIVE_PATH) as file_url,
     s.SIZE as file_size,
-    s.LAST_MODIFIED,
+    s.LAST_MODIFIED::TIMESTAMP_NTZ,
     SNOWFLAKE.CORTEX.AI_EXTRACT(
-        file => TO_FILE(@invoice_stage, s.RELATIVE_PATH),
+        file => TO_FILE('@invoice_stage', s.RELATIVE_PATH),
         responseFormat => {
             'schema': {
                 'type': 'object',
@@ -495,57 +495,57 @@ $$;
 -- PUT file:///path/to/docs/MB66680464.pdf @invoice_stage AUTO_COMPRESS=FALSE;
 
 -- 2. Refresh directory and check
--- ALTER STAGE invoice_stage REFRESH;
--- SELECT * FROM DIRECTORY(@invoice_stage);
+ALTER STAGE invoice_stage REFRESH;
+SELECT * FROM DIRECTORY(@invoice_stage);
 
 -- 3. Check stream for new files
--- SELECT * FROM invoice_stage_stream;
+SELECT * FROM invoice_stage_stream;
 
 -- 5. Manually execute extraction task
--- EXECUTE TASK task_extract_invoices;
+EXECUTE TASK task_extract_invoices;
 
 -- 6. Check raw JSON results
--- SELECT * FROM raw_json ORDER BY extraction_timestamp DESC;
+SELECT * FROM raw_json ORDER BY extraction_timestamp DESC;
 
 -- 7. View extracted JSON (pretty print)
--- SELECT 
---     file_name,
---     extraction_timestamp,
---     TO_JSON(extracted_json) as json_data
--- FROM raw_json 
--- ORDER BY extraction_timestamp DESC;
+SELECT 
+    file_name,
+    extraction_timestamp,
+    TO_JSON(extracted_json) as json_data
+FROM raw_json 
+ORDER BY extraction_timestamp DESC;
 
 -- 8. Check raw_json stream
--- SELECT * FROM raw_json_stream;
+SELECT * FROM raw_json_stream;
 
 -- 9. Manually execute parsing task
--- EXECUTE TASK task_parse_json_to_tables;
+EXECUTE TASK task_parse_json_to_tables;
 
 -- 10. View pipeline monitoring
--- SELECT * FROM pipeline_monitoring;
+SELECT * FROM pipeline_monitoring;
 
 -- 11. View invoice summary
--- SELECT * FROM invoice_summary;
+SELECT * FROM invoice_summary;
 
 -- 12. View invoice details
--- SELECT * FROM invoice_detail_view;
+SELECT * FROM invoice_detail_view;
 
 -- 13. Get pipeline statistics
--- CALL get_pipeline_stats();
+CALL get_pipeline_stats();
 
 -- 14. Check task execution history
--- SELECT 
---     name,
---     state,
---     scheduled_time,
---     completed_time,
---     return_value,
---     error_code,
---     error_message
--- FROM TABLE(INFORMATION_SCHEMA.TASK_HISTORY())
--- WHERE name IN ('TASK_EXTRACT_INVOICES', 'TASK_PARSE_JSON_TO_TABLES')
--- ORDER BY scheduled_time DESC
--- LIMIT 20;
+SELECT 
+    name,
+    state,
+    scheduled_time,
+    completed_time,
+    return_value,
+    error_code,
+    error_message
+FROM TABLE(INFORMATION_SCHEMA.TASK_HISTORY())
+WHERE name IN ('TASK_EXTRACT_INVOICES', 'TASK_PARSE_JSON_TO_TABLES')
+ORDER BY scheduled_time DESC
+LIMIT 20;
 
 -- ============================================================================
 -- CLEANUP
