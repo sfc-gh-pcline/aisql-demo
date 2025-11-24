@@ -238,7 +238,7 @@ WHERE s.RELATIVE_PATH ILIKE '%.pdf';
 -- ============================================================================
 
 CREATE OR REPLACE TASK task_parse_json_to_tables
-    WAREHOUSE = COMPUTE_WH
+    WAREHOUSE = SNOWFLAKE_INTELLIGENCE_WH
     AFTER task_extract_invoices
     WHEN SYSTEM$STREAM_HAS_DATA('raw_json_stream')
 AS

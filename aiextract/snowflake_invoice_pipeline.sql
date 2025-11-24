@@ -156,7 +156,7 @@ CREATE OR REPLACE TABLE invoice_detail (
 
 -- Task 1: Extract PDF content to JSON using AI_EXTRACT
 CREATE OR REPLACE TASK task_extract_invoices
-    WAREHOUSE = COMPUTE_WH
+    WAREHOUSE = SNOWFLAKE_INTELLIGENCE_WH
     SCHEDULE = '1 MINUTE'
     WHEN SYSTEM$STREAM_HAS_DATA('invoice_stage_stream')
 AS
@@ -313,7 +313,7 @@ END;
 
 -- Task 2: Parse JSON from raw_json into invoice and invoice_detail tables
 CREATE OR REPLACE TASK task_parse_json_to_tables
-    WAREHOUSE = COMPUTE_WH
+    WAREHOUSE = SNOWFLAKE_INTELLIGENCE_WH
     AFTER task_extract_invoices
     WHEN SYSTEM$STREAM_HAS_DATA('raw_json_stream')
 AS
