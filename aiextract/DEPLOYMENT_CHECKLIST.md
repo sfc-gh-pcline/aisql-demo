@@ -4,7 +4,7 @@ Use this checklist to deploy the Snowflake AI Invoice Processing Pipeline step-b
 
 ---
 
-##  Pre-Deployment
+## 📋 Pre-Deployment
 
 ### Environment Verification
 
@@ -56,13 +56,13 @@ Use this checklist to deploy the Snowflake AI Invoice Processing Pipeline step-b
 
 ---
 
-##  Deployment Steps
+## 🚀 Deployment Steps
 
 ### Step 1: Create Database Objects
 
 - [ ] **Connect to Snowflake**
   ```
-  Method:  Web UI   SnowSQL   Other: ____________
+  Method: ☐ Web UI  ☐ SnowSQL  ☐ Other: ____________
   ```
 
 - [ ] **Execute Main Script**
@@ -75,14 +75,14 @@ Use this checklist to deploy the Snowflake AI Invoice Processing Pipeline step-b
   ```sql
   SHOW DATABASES LIKE 'INVOICE_PROCESSING_POC';
   ```
-  - [ ] Database exists: 
+  - [ ] Database exists: ✓
 
 - [ ] **Verify Schema Created**
   ```sql
   USE DATABASE invoice_processing_poc;
   SHOW SCHEMAS LIKE 'INVOICE_PIPELINE';
   ```
-  - [ ] Schema exists: 
+  - [ ] Schema exists: ✓
 
 ### Step 2: Verify Objects Created
 
@@ -91,11 +91,10 @@ Use this checklist to deploy the Snowflake AI Invoice Processing Pipeline step-b
   USE SCHEMA invoice_pipeline;
   SHOW TABLES;
   ```
-  - [ ] invoice_stage_directory
   - [ ] raw_json
   - [ ] invoice
   - [ ] invoice_detail
-  - [ ] Total tables: 4 
+  - [ ] Total tables: 4 ✓
 
 - [ ] **Check Views**
   ```sql
@@ -104,7 +103,7 @@ Use this checklist to deploy the Snowflake AI Invoice Processing Pipeline step-b
   - [ ] pipeline_monitoring
   - [ ] invoice_summary
   - [ ] invoice_detail_view
-  - [ ] Total views: 3 
+  - [ ] Total views: 3 ✓
 
 - [ ] **Check Streams**
   ```sql
@@ -112,7 +111,7 @@ Use this checklist to deploy the Snowflake AI Invoice Processing Pipeline step-b
   ```
   - [ ] invoice_stage_stream
   - [ ] raw_json_stream
-  - [ ] Total streams: 2 
+  - [ ] Total streams: 2 ✓
 
 - [ ] **Check Tasks**
   ```sql
@@ -120,7 +119,7 @@ Use this checklist to deploy the Snowflake AI Invoice Processing Pipeline step-b
   ```
   - [ ] task_extract_invoices (state: suspended)
   - [ ] task_parse_json_to_tables (state: suspended)
-  - [ ] Total tasks: 2 
+  - [ ] Total tasks: 2 ✓
 
 - [ ] **Check Procedures**
   ```sql
@@ -128,14 +127,14 @@ Use this checklist to deploy the Snowflake AI Invoice Processing Pipeline step-b
   ```
   - [ ] refresh_and_process()
   - [ ] get_pipeline_stats()
-  - [ ] Total procedures: 2 
+  - [ ] Total procedures: 2 ✓
 
 - [ ] **Check Stage**
   ```sql
   SHOW STAGES;
   ```
   - [ ] invoice_stage (with directory enabled)
-  - [ ] Total stages: 1 
+  - [ ] Total stages: 1 ✓
 
 ### Step 3: Upload Test Files
 
@@ -240,13 +239,13 @@ Use this checklist to deploy the Snowflake AI Invoice Processing Pipeline step-b
   - [ ] Review output for failures
 
 - [ ] **Test Results Summary**
-  - [ ] Pre-deployment validation:  Pass  Fail
-  - [ ] Stage testing:  Pass  Fail
-  - [ ] AI extraction testing:  Pass  Fail
-  - [ ] JSON parsing testing:  Pass  Fail
-  - [ ] Monitoring views testing:  Pass  Fail
-  - [ ] Data quality validation:  Pass  Fail
-  - [ ] End-to-end validation:  Pass  Fail
+  - [ ] Pre-deployment validation: ☐ Pass ☐ Fail
+  - [ ] Stage testing: ☐ Pass ☐ Fail
+  - [ ] AI extraction testing: ☐ Pass ☐ Fail
+  - [ ] JSON parsing testing: ☐ Pass ☐ Fail
+  - [ ] Monitoring views testing: ☐ Pass ☐ Fail
+  - [ ] Data quality validation: ☐ Pass ☐ Fail
+  - [ ] End-to-end validation: ☐ Pass ☐ Fail
 
 - [ ] **Address Any Failures**
   - [ ] Review `TROUBLESHOOTING.md`
@@ -256,7 +255,7 @@ Use this checklist to deploy the Snowflake AI Invoice Processing Pipeline step-b
 
 ### Step 6: Enable Automated Processing (Optional)
 
- **Note:** Only enable if you want automatic processing. You can always process manually with `CALL refresh_and_process();`
+⚠️ **Note:** Only enable if you want automatic processing. You can always process manually with `CALL refresh_and_process();`
 
 - [ ] **Resume Tasks**
   ```sql
@@ -300,7 +299,7 @@ Use this checklist to deploy the Snowflake AI Invoice Processing Pipeline step-b
 
 ---
 
-##  Post-Deployment
+## 📊 Post-Deployment
 
 ### Validation
 
@@ -378,7 +377,7 @@ Use this checklist to deploy the Snowflake AI Invoice Processing Pipeline step-b
 
 ---
 
-##  Go-Live Checklist
+## ✅ Go-Live Checklist
 
 ### Before Production
 
@@ -424,7 +423,7 @@ Use this checklist to deploy the Snowflake AI Invoice Processing Pipeline step-b
 
 ---
 
-##  Rollback Plan
+## 🚨 Rollback Plan
 
 If critical issues arise:
 
@@ -482,14 +481,14 @@ _____________________________________________________
 
 ### Follow-Up Actions:
 ```
- _____________________________________________________
- _____________________________________________________
- _____________________________________________________
+☐ _____________________________________________________
+☐ _____________________________________________________
+☐ _____________________________________________________
 ```
 
 ---
 
-##  Deployment Complete!
+## ✨ Deployment Complete!
 
 Congratulations! Your Snowflake AI Invoice Processing Pipeline is now deployed.
 

@@ -20,7 +20,7 @@ SELECT 'Tables' as object_type, COUNT(*) as count
 FROM INFORMATION_SCHEMA.TABLES 
 WHERE TABLE_SCHEMA = 'INVOICE_PIPELINE'
   AND TABLE_TYPE = 'BASE TABLE';
--- Expected: 4 tables (invoice_stage_directory, raw_json, invoice, invoice_detail)
+-- Expected: 3 tables (raw_json, invoice, invoice_detail)
 
 -- Check Views
 SELECT 'Views' as object_type, COUNT(*) as count 
@@ -99,21 +99,40 @@ SELECT
     'AI Extraction Test' as test_name,
     RELATIVE_PATH as file_name,
     SNOWFLAKE.CORTEX.AI_EXTRACT(
-        BUILD_SCOPED_FILE_URL(@invoice_stage, RELATIVE_PATH),
-        {
-            'invoice_number': 'Invoice number',
-            'invoice_date': 'Invoice date',
-            'vendor': {'name': 'Vendor name'},
-            'customer': {'name': 'Customer name'},
-            'financial': {'total_amount': 'Total amount'},
-            'line_items': [
-                {
-                    'description': 'Item description',
-                    'quantity': 'Quantity',
-                    'unit_price': 'Unit price',
-                    'line_amount': 'Line total'
+        file => TO_FILE(@invoice_stage, RELATIVE_PATH),
+        responseFormat => {
+            'schema': {
+                'type': 'object',
+                'properties': {
+                    'invoice_number': 'Invoice number',
+                    'invoice_date': 'Invoice date',
+                    'vendor': 'Vendor name',
+                    'customer': 'Customer name',
+                    'total_amount': 'Total amount',
+                    'line_items': {
+                        'description': 'Invoice line item details',
+                        'type': 'object',
+                        'properties': {
+                            'line_description': {
+                                'description': 'Item description',
+                                'type': 'array'
+                            },
+                            'quantity': {
+                                'description': 'Quantity',
+                                'type': 'array'
+                            },
+                            'unit_price': {
+                                'description': 'Unit price',
+                                'type': 'array'
+                            },
+                            'line_amount': {
+                                'description': 'Line total',
+                                'type': 'array'
+                            }
+                        }
+                    }
                 }
-            ]
+            }
         }
     ) as extracted_sample
 FROM DIRECTORY(@invoice_stage)
@@ -449,7 +468,7 @@ SELECT
     i.invoice_id,
     i.invoice_number,
     COUNT(d.invoice_detail_id) as line_items
-FROM invoice_stage_directory sd
+FROM DIRECTORY(@invoice_stage) sd
 LEFT JOIN raw_json r ON sd.RELATIVE_PATH = r.file_name
 LEFT JOIN invoice i ON r.extraction_id = i.extraction_id
 LEFT JOIN invoice_detail d ON i.invoice_id = d.invoice_id
@@ -562,12 +581,11 @@ SELECT '-- Uncomment these commands to reset the pipeline' as warning;
 TRUNCATE TABLE invoice_detail;
 TRUNCATE TABLE invoice;
 TRUNCATE TABLE raw_json;
-TRUNCATE TABLE invoice_stage_directory;
 
 -- Recreate streams
+-- Note: Directory streams cannot use APPEND_ONLY = TRUE
 CREATE OR REPLACE STREAM invoice_stage_stream 
-ON TABLE invoice_stage_directory
-APPEND_ONLY = TRUE;
+ON STAGE invoice_stage;
 
 CREATE OR REPLACE STREAM raw_json_stream 
 ON TABLE raw_json
@@ -587,7 +605,7 @@ SELECT '=== FINAL VALIDATION SUMMARY ===' as test_section;
 SELECT 
     'Pipeline Health Check' as report_name,
     CURRENT_TIMESTAMP() as report_time,
-    (SELECT COUNT(*) FROM invoice_stage_directory WHERE RELATIVE_PATH ILIKE '%.pdf') as total_files,
+    (SELECT COUNT(*) FROM DIRECTORY(@invoice_stage) WHERE RELATIVE_PATH ILIKE '%.pdf') as total_files,
     (SELECT COUNT(*) FROM raw_json) as total_extractions,
     (SELECT COUNT(*) FROM raw_json WHERE processing_status = 'SUCCESS') as successful_extractions,
     (SELECT COUNT(*) FROM raw_json WHERE processing_status = 'ERROR') as failed_extractions,

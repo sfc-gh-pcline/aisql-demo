@@ -15,10 +15,15 @@ USE SCHEMA invoice_pipeline;
 SELECT 
     RELATIVE_PATH as filename,
     SNOWFLAKE.CORTEX.AI_EXTRACT(
-        BUILD_SCOPED_FILE_URL(@invoice_stage, RELATIVE_PATH),
-        {
-            'invoice_number': 'Invoice number or invoice ID',
-            'total_amount': 'Total amount to be paid'
+        file => TO_FILE(@invoice_stage, RELATIVE_PATH),
+        responseFormat => {
+            'schema': {
+                'type': 'object',
+                'properties': {
+                    'invoice_number': 'Invoice number or invoice ID',
+                    'total_amount': 'Total amount to be paid'
+                }
+            }
         }
     ) as extracted_data
 FROM DIRECTORY(@invoice_stage)
@@ -32,7 +37,7 @@ LIMIT 1;
 SELECT 
     RELATIVE_PATH as filename,
     SNOWFLAKE.CORTEX.AI_EXTRACT(
-        BUILD_SCOPED_FILE_URL(@invoice_stage, RELATIVE_PATH),
+        TO_FILE(@invoice_stage, RELATIVE_PATH),
         {
             'vendor_name': 'Name of the company or person issuing the invoice',
             'vendor_address': 'Full mailing address of the vendor',
@@ -51,7 +56,7 @@ LIMIT 1;
 SELECT 
     RELATIVE_PATH as filename,
     SNOWFLAKE.CORTEX.AI_EXTRACT(
-        BUILD_SCOPED_FILE_URL(@invoice_stage, RELATIVE_PATH),
+        TO_FILE(@invoice_stage, RELATIVE_PATH),
         {
             'subtotal': 'Subtotal before tax and shipping',
             'tax_amount': 'Total tax charged',
@@ -72,7 +77,7 @@ LIMIT 1;
 SELECT 
     RELATIVE_PATH as filename,
     SNOWFLAKE.CORTEX.AI_EXTRACT(
-        BUILD_SCOPED_FILE_URL(@invoice_stage, RELATIVE_PATH),
+        TO_FILE(@invoice_stage, RELATIVE_PATH),
         {
             'invoice_date': 'Date the invoice was issued, in YYYY-MM-DD format',
             'due_date': 'Payment due date, in YYYY-MM-DD format',
@@ -91,7 +96,7 @@ LIMIT 1;
 SELECT 
     RELATIVE_PATH as filename,
     SNOWFLAKE.CORTEX.AI_EXTRACT(
-        BUILD_SCOPED_FILE_URL(@invoice_stage, RELATIVE_PATH),
+        TO_FILE(@invoice_stage, RELATIVE_PATH),
         {
             'line_items': [
                 {
@@ -114,49 +119,78 @@ LIMIT 1;
 SELECT 
     RELATIVE_PATH as filename,
     SNOWFLAKE.CORTEX.AI_EXTRACT(
-        BUILD_SCOPED_FILE_URL(@invoice_stage, RELATIVE_PATH),
-        {
-            'invoice_number': 'Invoice number',
-            'invoice_date': 'Invoice date in YYYY-MM-DD format',
-            'due_date': 'Payment due date in YYYY-MM-DD format',
-            'vendor': {
-                'name': 'Vendor or seller company name',
-                'address': 'Vendor street address',
-                'city': 'Vendor city',
-                'state': 'Vendor state or province',
-                'zip': 'Vendor postal code',
-                'country': 'Vendor country',
-                'phone': 'Vendor phone number',
-                'email': 'Vendor email address',
-                'tax_id': 'Vendor tax ID or EIN'
-            },
-            'customer': {
-                'name': 'Customer or buyer company name',
-                'address': 'Customer street address',
-                'city': 'Customer city',
-                'state': 'Customer state or province',
-                'zip': 'Customer postal code',
-                'country': 'Customer country'
-            },
-            'financial': {
-                'subtotal': 'Subtotal amount before tax',
-                'tax_amount': 'Total tax amount',
-                'tax_rate': 'Tax rate percentage',
-                'shipping_amount': 'Shipping or freight charges',
-                'total_amount': 'Final total amount',
-                'currency': 'Currency code (e.g., USD, EUR)'
-            },
-            'payment_terms': 'Payment terms (e.g., Net 30)',
-            'po_number': 'Purchase order number',
-            'line_items': [
-                {
-                    'line_number': 'Line item number',
-                    'description': 'Item or service description',
-                    'quantity': 'Quantity ordered',
-                    'unit_price': 'Price per unit',
-                    'line_amount': 'Total line amount'
+        file => TO_FILE(@invoice_stage, RELATIVE_PATH),
+        responseFormat => {
+            'schema': {
+                'type': 'object',
+                'properties': {
+                    'invoice_number': 'Invoice number',
+                    'order_number': 'Order number',
+                    'invoice_date': 'Invoice date in YYYY-MM-DD format',
+                    'due_date': 'Payment due date in YYYY-MM-DD format',
+                    'vendor': 'Vendor or seller company name',
+                    'vendor_address': 'Complete vendor address',
+                    'vendor_phone': 'Vendor phone number',
+                    'vendor_email': 'Vendor email address',
+                    'vendor_tax_id': 'Vendor tax ID or EIN',
+                    'customer': 'Customer or buyer company name',
+                    'customer_address': 'Complete customer address',
+                    'customer_phone': 'Customer phone number',
+                    'customer_email': 'Customer email address',
+                    'subtotal': 'Subtotal amount before tax',
+                    'tax_amount': 'Total tax amount',
+                    'tax_rate': 'Tax rate percentage',
+                    'shipping_amount': 'Shipping or freight charges',
+                    'discount_amount': 'Total discount amount',
+                    'total_amount': 'Final total amount',
+                    'currency': 'Currency code (e.g., USD, EUR)',
+                    'payment_terms': 'Payment terms (e.g., Net 30, Due on Receipt)',
+                    'po_number': 'Purchase order number',
+                    'notes': 'Additional notes or comments on the invoice',
+                    'line_items': {
+                        'description': 'Invoice line item details',
+                        'type': 'object',
+                        'properties': {
+                            'line_number': {
+                                'description': 'Line item number',
+                                'type': 'array'
+                            },
+                            'line_description': {
+                                'description': 'Item or service description',
+                                'type': 'array'
+                            },
+                            'item_code': {
+                                'description': 'Item code, SKU, or product ID',
+                                'type': 'array'
+                            },
+                            'quantity': {
+                                'description': 'Quantity ordered',
+                                'type': 'array'
+                            },
+                            'unit_of_measure': {
+                                'description': 'Unit of measure (e.g., EA, HR, BOX)',
+                                'type': 'array'
+                            },
+                            'unit_price': {
+                                'description': 'Price per unit',
+                                'type': 'array'
+                            },
+                            'line_amount': {
+                                'description': 'Total line amount (quantity × unit price)',
+                                'type': 'array'
+                            },
+                            'tax_amount': {
+                                'description': 'Tax amount for this line',
+                                'type': 'array'
+                            },
+                            'line_note': {
+                                'description': 'Custom notes entry for each line item',
+                                'type': 'array'
+                            }
+                        }
+                    }
                 }
-            ]
+            }
         }
     ) as complete_invoice
 FROM DIRECTORY(@invoice_stage)
@@ -172,7 +206,7 @@ WITH extracted AS (
     SELECT 
         RELATIVE_PATH as filename,
         SNOWFLAKE.CORTEX.AI_EXTRACT(
-            BUILD_SCOPED_FILE_URL(@invoice_stage, RELATIVE_PATH),
+            TO_FILE(@invoice_stage, RELATIVE_PATH),
             {
                 'invoice_number': 'Invoice number',
                 'invoice_date': 'Invoice date',
@@ -200,7 +234,7 @@ WITH extracted AS (
     SELECT 
         RELATIVE_PATH as filename,
         SNOWFLAKE.CORTEX.AI_EXTRACT(
-            BUILD_SCOPED_FILE_URL(@invoice_stage, RELATIVE_PATH),
+            TO_FILE(@invoice_stage, RELATIVE_PATH),
             {
                 'invoice_number': 'Invoice number',
                 'line_items': [
@@ -236,14 +270,14 @@ SELECT
     RELATIVE_PATH as filename,
     TRY_CAST(
         SNOWFLAKE.CORTEX.AI_EXTRACT(
-            BUILD_SCOPED_FILE_URL(@invoice_stage, RELATIVE_PATH),
+            TO_FILE(@invoice_stage, RELATIVE_PATH),
             {'invoice_number': 'Invoice number'}
         ) AS VARIANT
     ) as extracted_data,
     CASE 
         WHEN TRY_CAST(
             SNOWFLAKE.CORTEX.AI_EXTRACT(
-                BUILD_SCOPED_FILE_URL(@invoice_stage, RELATIVE_PATH),
+                TO_FILE(@invoice_stage, RELATIVE_PATH),
                 {'invoice_number': 'Invoice number'}
             ) AS VARIANT
         ) IS NULL THEN 'Extraction failed'
@@ -261,7 +295,7 @@ LIMIT 1;
 SELECT 
     'Simple' as approach,
     SNOWFLAKE.CORTEX.AI_EXTRACT(
-        BUILD_SCOPED_FILE_URL(@invoice_stage, RELATIVE_PATH),
+        TO_FILE(@invoice_stage, RELATIVE_PATH),
         {
             'invoice_number': 'Invoice number',
             'total': 'Total'
@@ -277,7 +311,7 @@ UNION ALL
 SELECT 
     'Detailed' as approach,
     SNOWFLAKE.CORTEX.AI_EXTRACT(
-        BUILD_SCOPED_FILE_URL(@invoice_stage, RELATIVE_PATH),
+        TO_FILE(@invoice_stage, RELATIVE_PATH),
         {
             'invoice_number': 'Invoice number, typically a unique identifier in the format INV-XXXXX or similar',
             'total': 'Total amount to be paid, including tax and all other charges, usually found at the bottom of the invoice'
@@ -342,7 +376,7 @@ SELECT
 FROM (
     SELECT 
         SNOWFLAKE.CORTEX.AI_EXTRACT(
-            BUILD_SCOPED_FILE_URL(@invoice_stage, RELATIVE_PATH),
+            TO_FILE(@invoice_stage, RELATIVE_PATH),
             {
                 'invoice_number': 'Invoice number',
                 'invoice_id': 'Invoice ID if invoice number not found'
@@ -365,7 +399,7 @@ SELECT
 FROM (
     SELECT 
         SNOWFLAKE.CORTEX.AI_EXTRACT(
-            BUILD_SCOPED_FILE_URL(@invoice_stage, RELATIVE_PATH),
+            TO_FILE(@invoice_stage, RELATIVE_PATH),
             {
                 'invoice_number': 'Invoice number',
                 'total_amount': 'Total amount'
@@ -381,14 +415,14 @@ SELECT
     RELATIVE_PATH,
     TRY_CAST(
         SNOWFLAKE.CORTEX.AI_EXTRACT(
-            BUILD_SCOPED_FILE_URL(@invoice_stage, RELATIVE_PATH),
+            TO_FILE(@invoice_stage, RELATIVE_PATH),
             {'invoice_number': 'Invoice number'}
         ) AS VARIANT
     ) as extracted_data,
     IFF(
         TRY_CAST(
             SNOWFLAKE.CORTEX.AI_EXTRACT(
-                BUILD_SCOPED_FILE_URL(@invoice_stage, RELATIVE_PATH),
+                TO_FILE(@invoice_stage, RELATIVE_PATH),
                 {'invoice_number': 'Invoice number'}
             ) AS VARIANT
         ) IS NOT NULL,

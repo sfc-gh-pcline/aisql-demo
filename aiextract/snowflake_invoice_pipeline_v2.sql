@@ -18,21 +18,20 @@ USE SCHEMA invoice_pipeline;
 -- ============================================================================
 
 CREATE OR REPLACE STAGE invoice_stage
+    ENCRYPTION = (TYPE = 'SNOWFLAKE_SSE')
     DIRECTORY = (ENABLE = TRUE)
     COMMENT = 'Stage for storing PDF invoice files';
 
 -- ============================================================================
--- STEP 3: CREATE DIRECTORY TABLE AND STREAM
+-- STEP 3: CREATE STREAM ON STAGE DIRECTORY
 -- ============================================================================
 
--- Directory table to monitor files in the stage
-CREATE OR REPLACE TABLE invoice_stage_directory AS
-SELECT * FROM DIRECTORY(@invoice_stage);
-
 -- Stream to capture new files added to the stage
+-- Note: The stage already has an implicit directory table (DIRECTORY = ENABLE = TRUE)
+-- We can create a stream directly on the stage to monitor file changes
+-- Note: Directory streams cannot be APPEND_ONLY since they track both additions and deletions
 CREATE OR REPLACE STREAM invoice_stage_stream 
-ON TABLE invoice_stage_directory
-APPEND_ONLY = TRUE
+ON STAGE invoice_stage
 COMMENT = 'Stream to track new PDF files in invoice stage';
 
 -- ============================================================================
@@ -122,12 +121,9 @@ CREATE OR REPLACE TABLE invoice_detail (
     unit_of_measure VARCHAR(50),
     unit_price DECIMAL(18,4),
     line_amount DECIMAL(18,2),
-    discount_percent DECIMAL(5,2),
-    discount_amount DECIMAL(18,2),
     tax_amount DECIMAL(18,2),
     
     -- Additional Fields
-    category VARCHAR(200),
     notes VARCHAR(1000),
     
     -- Metadata
@@ -141,7 +137,7 @@ CREATE OR REPLACE TABLE invoice_detail (
 -- ============================================================================
 
 CREATE OR REPLACE TASK task_extract_invoices
-    WAREHOUSE = COMPUTE_WH
+    WAREHOUSE = SNOWFLAKE_INTELLIGENCE_WH
     SCHEDULE = '1 MINUTE'
     WHEN SYSTEM$STREAM_HAS_DATA('invoice_stage_stream')
 AS
@@ -157,62 +153,80 @@ SELECT
     s.RELATIVE_PATH as file_name,
     BUILD_SCOPED_FILE_URL(@invoice_stage, s.RELATIVE_PATH) as file_url,
     s.SIZE as file_size,
-    s.LAST_MODIFIED,
+    s.LAST_MODIFIED::TIMESTAMP_NTZ,
     SNOWFLAKE.CORTEX.AI_EXTRACT(
-        BUILD_SCOPED_FILE_URL(@invoice_stage, s.RELATIVE_PATH),
-        {
-            'invoice_number': 'Invoice number',
-            'invoice_date': 'Invoice date in YYYY-MM-DD format',
-            'due_date': 'Payment due date in YYYY-MM-DD format',
-            'vendor': {
-                'name': 'Vendor or seller company name',
-                'address': 'Vendor street address',
-                'city': 'Vendor city',
-                'state': 'Vendor state or province',
-                'zip': 'Vendor postal code',
-                'country': 'Vendor country',
-                'phone': 'Vendor phone number',
-                'email': 'Vendor email address',
-                'tax_id': 'Vendor tax ID or EIN'
-            },
-            'customer': {
-                'name': 'Customer or buyer company name',
-                'address': 'Customer street address',
-                'city': 'Customer city',
-                'state': 'Customer state or province',
-                'zip': 'Customer postal code',
-                'country': 'Customer country',
-                'phone': 'Customer phone number',
-                'email': 'Customer email address'
-            },
-            'financial': {
-                'subtotal': 'Subtotal amount before tax',
-                'tax_amount': 'Total tax amount',
-                'tax_rate': 'Tax rate percentage',
-                'shipping_amount': 'Shipping or freight charges',
-                'discount_amount': 'Total discount amount',
-                'total_amount': 'Final total amount',
-                'currency': 'Currency code (e.g., USD, EUR)'
-            },
-            'payment_terms': 'Payment terms (e.g., Net 30, Due on Receipt)',
-            'po_number': 'Purchase order number',
-            'notes': 'Additional notes or comments on the invoice',
-            'line_items': [
-                {
-                    'line_number': 'Line item number',
-                    'description': 'Item or service description',
-                    'item_code': 'Item code, SKU, or product ID',
-                    'quantity': 'Quantity ordered',
-                    'unit_of_measure': 'Unit of measure (e.g., EA, HR, BOX)',
-                    'unit_price': 'Price per unit',
-                    'line_amount': 'Total line amount (quantity × unit price)',
-                    'discount_percent': 'Discount percentage for this line',
-                    'discount_amount': 'Discount amount for this line',
-                    'tax_amount': 'Tax amount for this line',
-                    'category': 'Item category or type',
-                    'notes': 'Additional line item notes'
+        file => TO_FILE('@invoice_stage', s.RELATIVE_PATH),
+        responseFormat => {
+            'schema': {
+                'type': 'object',
+                'properties': {
+                    'invoice_number': 'Invoice number',
+                    'order_number': 'Order number',
+                    'invoice_date': 'Invoice date in YYYY-MM-DD format',
+                    'due_date': 'Payment due date in YYYY-MM-DD format',
+                    'vendor': 'Vendor or seller company name',
+                    'vendor_address': 'Complete vendor address',
+                    'vendor_phone': 'Vendor phone number',
+                    'vendor_email': 'Vendor email address',
+                    'vendor_tax_id': 'Vendor tax ID or EIN',
+                    'customer': 'Customer or buyer company name',
+                    'customer_address': 'Complete customer address',
+                    'customer_phone': 'Customer phone number',
+                    'customer_email': 'Customer email address',
+                    'subtotal': 'Subtotal amount before tax',
+                    'tax_amount': 'Total tax amount',
+                    'tax_rate': 'Tax rate percentage',
+                    'shipping_amount': 'Shipping or freight charges',
+                    'discount_amount': 'Total discount amount',
+                    'total_amount': 'Final total amount',
+                    'currency': 'Currency code (e.g., USD, EUR)',
+                    'payment_terms': 'Payment terms (e.g., Net 30, Due on Receipt)',
+                    'po_number': 'Purchase order number',
+                    'notes': 'Additional notes or comments on the invoice',
+                    'line_items': {
+                        'description': 'Invoice line item details',
+                        'type': 'object',
+                        'properties': {
+                            'line_number': {
+                                'description': 'Line item number',
+                                'type': 'array'
+                            },
+                            'line_description': {
+                                'description': 'Item or service description',
+                                'type': 'array'
+                            },
+                            'line_amount': {
+                                'description': 'Total line amount (quantity × unit price)',
+                                'type': 'array'
+                            },
+                            'line_note': {
+                                'description': 'Custom notes entry for each line item',
+                                'type': 'array'
+                            },
+                            'item_code': {
+                                'description': 'Item code, SKU, or product ID',
+                                'type': 'array'
+                            },
+                            'quantity': {
+                                'description': 'Quantity ordered',
+                                'type': 'array'
+                            },
+                            'unit_of_measure': {
+                                'description': 'Unit of measure (e.g., EA, HR, BOX)',
+                                'type': 'array'
+                            },
+                            'unit_price': {
+                                'description': 'Price per unit',
+                                'type': 'array'
+                            },
+                            'tax_amount': {
+                                'description': 'Tax amount for this line',
+                                'type': 'array'
+                            }
+                        }
+                    }
                 }
-            ]
+            }
         }
     ) as extracted_json,
     'SUCCESS' as processing_status
@@ -224,7 +238,7 @@ WHERE s.RELATIVE_PATH ILIKE '%.pdf';
 -- ============================================================================
 
 CREATE OR REPLACE TASK task_parse_json_to_tables
-    WAREHOUSE = COMPUTE_WH
+    WAREHOUSE = SNOWFLAKE_INTELLIGENCE_WH
     AFTER task_extract_invoices
     WHEN SYSTEM$STREAM_HAS_DATA('raw_json_stream')
 AS
@@ -268,30 +282,30 @@ BEGIN
         s.extracted_json:invoice_number::VARCHAR,
         TRY_TO_DATE(s.extracted_json:invoice_date::VARCHAR),
         TRY_TO_DATE(s.extracted_json:due_date::VARCHAR),
-        s.extracted_json:vendor.name::VARCHAR,
-        s.extracted_json:vendor.address::VARCHAR,
-        s.extracted_json:vendor.city::VARCHAR,
-        s.extracted_json:vendor.state::VARCHAR,
-        s.extracted_json:vendor.zip::VARCHAR,
-        s.extracted_json:vendor.country::VARCHAR,
-        s.extracted_json:vendor.phone::VARCHAR,
-        s.extracted_json:vendor.email::VARCHAR,
-        s.extracted_json:vendor.tax_id::VARCHAR,
-        s.extracted_json:customer.name::VARCHAR,
-        s.extracted_json:customer.address::VARCHAR,
-        s.extracted_json:customer.city::VARCHAR,
-        s.extracted_json:customer.state::VARCHAR,
-        s.extracted_json:customer.zip::VARCHAR,
-        s.extracted_json:customer.country::VARCHAR,
-        s.extracted_json:customer.phone::VARCHAR,
-        s.extracted_json:customer.email::VARCHAR,
-        TRY_TO_DECIMAL(s.extracted_json:financial.subtotal, 18, 2),
-        TRY_TO_DECIMAL(s.extracted_json:financial.tax_amount, 18, 2),
-        TRY_TO_DECIMAL(s.extracted_json:financial.tax_rate, 5, 2),
-        TRY_TO_DECIMAL(s.extracted_json:financial.shipping_amount, 18, 2),
-        TRY_TO_DECIMAL(s.extracted_json:financial.discount_amount, 18, 2),
-        TRY_TO_DECIMAL(s.extracted_json:financial.total_amount, 18, 2),
-        COALESCE(s.extracted_json:financial.currency::VARCHAR, 'USD'),
+        s.extracted_json:vendor::VARCHAR,
+        s.extracted_json:vendor_address::VARCHAR,
+        NULL as vendor_city,
+        NULL as vendor_state,
+        NULL as vendor_zip,
+        NULL as vendor_country,
+        s.extracted_json:vendor_phone::VARCHAR,
+        s.extracted_json:vendor_email::VARCHAR,
+        s.extracted_json:vendor_tax_id::VARCHAR,
+        s.extracted_json:customer::VARCHAR,
+        s.extracted_json:customer_address::VARCHAR,
+        NULL as customer_city,
+        NULL as customer_state,
+        NULL as customer_zip,
+        NULL as customer_country,
+        s.extracted_json:customer_phone::VARCHAR,
+        s.extracted_json:customer_email::VARCHAR,
+        TRY_TO_DECIMAL(s.extracted_json:subtotal, 18, 2),
+        TRY_TO_DECIMAL(s.extracted_json:tax_amount, 18, 2),
+        TRY_TO_DECIMAL(s.extracted_json:tax_rate, 5, 2),
+        TRY_TO_DECIMAL(s.extracted_json:shipping_amount, 18, 2),
+        TRY_TO_DECIMAL(s.extracted_json:discount_amount, 18, 2),
+        TRY_TO_DECIMAL(s.extracted_json:total_amount, 18, 2),
+        COALESCE(s.extracted_json:currency::VARCHAR, 'USD'),
         s.extracted_json:payment_terms::VARCHAR,
         s.extracted_json:po_number::VARCHAR,
         s.extracted_json:notes::VARCHAR
@@ -299,6 +313,7 @@ BEGIN
     WHERE s.processing_status = 'SUCCESS';
     
     -- Insert invoice line items
+    -- Line items are in columnar format (arrays), so we need to reconstruct them by index
     INSERT INTO invoice_detail (
         invoice_id,
         line_number,
@@ -308,29 +323,23 @@ BEGIN
         unit_of_measure,
         unit_price,
         line_amount,
-        discount_percent,
-        discount_amount,
         tax_amount,
-        category,
         notes
     )
     SELECT
         i.invoice_id,
-        line_item.value:line_number::NUMBER,
-        line_item.value:description::VARCHAR,
-        line_item.value:item_code::VARCHAR,
-        TRY_TO_DECIMAL(line_item.value:quantity, 18, 4),
-        line_item.value:unit_of_measure::VARCHAR,
-        TRY_TO_DECIMAL(line_item.value:unit_price, 18, 4),
-        TRY_TO_DECIMAL(line_item.value:line_amount, 18, 2),
-        TRY_TO_DECIMAL(line_item.value:discount_percent, 5, 2),
-        TRY_TO_DECIMAL(line_item.value:discount_amount, 18, 2),
-        TRY_TO_DECIMAL(line_item.value:tax_amount, 18, 2),
-        line_item.value:category::VARCHAR,
-        line_item.value:notes::VARCHAR
+        TRY_TO_NUMBER(s.extracted_json:line_items.line_number[idx.index]::VARCHAR) as line_number,
+        s.extracted_json:line_items.line_description[idx.index]::VARCHAR as item_description,
+        s.extracted_json:line_items.item_code[idx.index]::VARCHAR as item_code,
+        TRY_TO_DECIMAL(s.extracted_json:line_items.quantity[idx.index]::VARCHAR, 18, 4) as quantity,
+        s.extracted_json:line_items.unit_of_measure[idx.index]::VARCHAR as unit_of_measure,
+        TRY_TO_DECIMAL(s.extracted_json:line_items.unit_price[idx.index]::VARCHAR, 18, 4) as unit_price,
+        TRY_TO_DECIMAL(s.extracted_json:line_items.line_amount[idx.index]::VARCHAR, 18, 2) as line_amount,
+        TRY_TO_DECIMAL(s.extracted_json:line_items.tax_amount[idx.index]::VARCHAR, 18, 2) as tax_amount,
+        s.extracted_json:line_items.line_note[idx.index]::VARCHAR as notes
     FROM raw_json_stream s
     JOIN invoice i ON s.extraction_id = i.extraction_id
-    CROSS JOIN TABLE(FLATTEN(s.extracted_json:line_items)) line_item
+    CROSS JOIN TABLE(FLATTEN(s.extracted_json:line_items.line_number)) idx
     WHERE s.processing_status = 'SUCCESS';
 END;
 
@@ -428,19 +437,15 @@ ORDER BY i.invoice_number, d.line_number;
 -- STEP 9: HELPER PROCEDURES
 -- ============================================================================
 
--- Procedure to manually refresh directory table and process files
+-- Procedure to manually refresh directory and process files
 CREATE OR REPLACE PROCEDURE refresh_and_process()
 RETURNS STRING
 LANGUAGE SQL
 AS
 $$
 BEGIN
-    -- Refresh the stage directory
+    -- Refresh the stage directory (updates the implicit directory table)
     ALTER STAGE invoice_stage REFRESH;
-    
-    -- Update directory table
-    CREATE OR REPLACE TABLE invoice_stage_directory AS
-    SELECT * FROM DIRECTORY(@invoice_stage);
     
     -- Execute tasks manually (for testing)
     EXECUTE TASK task_extract_invoices;
@@ -490,60 +495,57 @@ $$;
 -- PUT file:///path/to/docs/MB66680464.pdf @invoice_stage AUTO_COMPRESS=FALSE;
 
 -- 2. Refresh directory and check
--- ALTER STAGE invoice_stage REFRESH;
--- SELECT * FROM DIRECTORY(@invoice_stage);
+ALTER STAGE invoice_stage REFRESH;
+SELECT * FROM DIRECTORY(@invoice_stage);
 
--- 3. Manually update directory table
--- CREATE OR REPLACE TABLE invoice_stage_directory AS SELECT * FROM DIRECTORY(@invoice_stage);
-
--- 4. Check stream for new files
--- SELECT * FROM invoice_stage_stream;
+-- 3. Check stream for new files
+SELECT * FROM invoice_stage_stream;
 
 -- 5. Manually execute extraction task
--- EXECUTE TASK task_extract_invoices;
+EXECUTE TASK task_extract_invoices;
 
 -- 6. Check raw JSON results
--- SELECT * FROM raw_json ORDER BY extraction_timestamp DESC;
+SELECT * FROM raw_json ORDER BY extraction_timestamp DESC;
 
 -- 7. View extracted JSON (pretty print)
--- SELECT 
---     file_name,
---     extraction_timestamp,
---     TO_JSON(extracted_json) as json_data
--- FROM raw_json 
--- ORDER BY extraction_timestamp DESC;
+SELECT 
+    file_name,
+    extraction_timestamp,
+    TO_JSON(extracted_json) as json_data
+FROM raw_json 
+ORDER BY extraction_timestamp DESC;
 
 -- 8. Check raw_json stream
--- SELECT * FROM raw_json_stream;
+SELECT * FROM raw_json_stream;
 
 -- 9. Manually execute parsing task
--- EXECUTE TASK task_parse_json_to_tables;
+EXECUTE TASK task_parse_json_to_tables;
 
 -- 10. View pipeline monitoring
--- SELECT * FROM pipeline_monitoring;
+SELECT * FROM pipeline_monitoring;
 
 -- 11. View invoice summary
--- SELECT * FROM invoice_summary;
+SELECT * FROM invoice_summary;
 
 -- 12. View invoice details
--- SELECT * FROM invoice_detail_view;
+SELECT * FROM invoice_detail_view;
 
 -- 13. Get pipeline statistics
--- CALL get_pipeline_stats();
+CALL get_pipeline_stats();
 
 -- 14. Check task execution history
--- SELECT 
---     name,
---     state,
---     scheduled_time,
---     completed_time,
---     return_value,
---     error_code,
---     error_message
--- FROM TABLE(INFORMATION_SCHEMA.TASK_HISTORY())
--- WHERE name IN ('TASK_EXTRACT_INVOICES', 'TASK_PARSE_JSON_TO_TABLES')
--- ORDER BY scheduled_time DESC
--- LIMIT 20;
+SELECT 
+    name,
+    state,
+    scheduled_time,
+    completed_time,
+    return_value,
+    error_code,
+    error_message
+FROM TABLE(INFORMATION_SCHEMA.TASK_HISTORY())
+WHERE name IN ('TASK_EXTRACT_INVOICES', 'TASK_PARSE_JSON_TO_TABLES')
+ORDER BY scheduled_time DESC
+LIMIT 20;
 
 -- ============================================================================
 -- CLEANUP
@@ -567,7 +569,6 @@ DROP VIEW IF EXISTS pipeline_monitoring;
 DROP TABLE IF EXISTS invoice_detail;
 DROP TABLE IF EXISTS invoice;
 DROP TABLE IF EXISTS raw_json;
-DROP TABLE IF EXISTS invoice_stage_directory;
 DROP STAGE IF EXISTS invoice_stage;
 DROP SCHEMA IF EXISTS invoice_pipeline;
 DROP DATABASE IF EXISTS invoice_processing_poc;

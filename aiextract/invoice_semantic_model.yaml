@@ -1,0 +1,457 @@
+# ============================================================================
+# Snowflake Semantic Model for Invoice Processing
+# ============================================================================
+# This YAML file defines a semantic model for invoice data that includes:
+# - Invoice header table with financial and vendor/customer information
+# - Invoice detail table with line item information
+# - Relationship between the two tables
+# - Descriptions and aliases for natural language queries
+# ============================================================================
+
+name: invoice_semantic_model
+description: Semantic model for invoice processing data including headers and line items
+
+tables:
+  - name: invoice
+    description: Invoice header information including vendor, customer, dates, and financial totals
+    database: invoice_processing_poc
+    schema: invoice_pipeline
+    synonyms:
+      - invoices
+      - bills
+      - sales invoices
+      - accounts receivable
+    
+    columns:
+      # Primary Key
+      - name: invoice_id
+        description: Unique identifier for the invoice record
+        data_type: NUMBER
+        synonyms:
+          - id
+          - invoice pk
+      
+      - name: extraction_id
+        description: Foreign key reference to the raw JSON extraction record
+        data_type: NUMBER
+        synonyms:
+          - extraction reference
+          - raw data id
+      
+      # Invoice Header
+      - name: invoice_number
+        description: Invoice number or identifier from the source document
+        data_type: VARCHAR
+        synonyms:
+          - invoice num
+          - invoice id
+          - bill number
+          - receipt number
+          - document number
+      
+      - name: invoice_date
+        description: Date the invoice was issued
+        data_type: DATE
+        synonyms:
+          - issue date
+          - billing date
+          - date issued
+          - invoice dt
+      
+      - name: due_date
+        description: Payment due date
+        data_type: DATE
+        synonyms:
+          - payment due date
+          - deadline
+          - pay by date
+          - maturity date
+      
+      # Vendor/Seller Information
+      - name: vendor_name
+        description: Name of the vendor or seller company
+        data_type: VARCHAR
+        synonyms:
+          - seller
+          - supplier
+          - provider
+          - merchant
+          - from company
+          - seller name
+      
+      - name: vendor_address
+        description: Complete vendor street address
+        data_type: VARCHAR
+        synonyms:
+          - seller address
+          - vendor street address
+          - from address
+      
+      - name: vendor_city
+        description: Vendor city
+        data_type: VARCHAR
+        synonyms:
+          - seller city
+          - vendor town
+      
+      - name: vendor_state
+        description: Vendor state or province
+        data_type: VARCHAR
+        synonyms:
+          - seller state
+          - vendor province
+      
+      - name: vendor_zip
+        description: Vendor postal code or ZIP code
+        data_type: VARCHAR
+        synonyms:
+          - seller zip
+          - vendor postal code
+          - vendor zipcode
+      
+      - name: vendor_country
+        description: Vendor country
+        data_type: VARCHAR
+        synonyms:
+          - seller country
+      
+      - name: vendor_phone
+        description: Vendor phone number
+        data_type: VARCHAR
+        synonyms:
+          - seller phone
+          - vendor telephone
+          - vendor contact number
+      
+      - name: vendor_email
+        description: Vendor email address
+        data_type: VARCHAR
+        synonyms:
+          - seller email
+          - vendor contact email
+      
+      - name: vendor_tax_id
+        description: Vendor tax ID or EIN
+        data_type: VARCHAR
+        synonyms:
+          - seller tax id
+          - vendor ein
+          - vendor tax number
+          - federal id
+      
+      # Customer/Buyer Information
+      - name: customer_name
+        description: Name of the customer or buyer company
+        data_type: VARCHAR
+        synonyms:
+          - buyer
+          - client
+          - purchaser
+          - bill to
+          - to company
+          - customer
+      
+      - name: customer_address
+        description: Complete customer street address
+        data_type: VARCHAR
+        synonyms:
+          - buyer address
+          - customer street address
+          - bill to address
+      
+      - name: customer_city
+        description: Customer city
+        data_type: VARCHAR
+        synonyms:
+          - buyer city
+          - customer town
+      
+      - name: customer_state
+        description: Customer state or province
+        data_type: VARCHAR
+        synonyms:
+          - buyer state
+          - customer province
+      
+      - name: customer_zip
+        description: Customer postal code or ZIP code
+        data_type: VARCHAR
+        synonyms:
+          - buyer zip
+          - customer postal code
+          - customer zipcode
+      
+      - name: customer_country
+        description: Customer country
+        data_type: VARCHAR
+        synonyms:
+          - buyer country
+      
+      - name: customer_phone
+        description: Customer phone number
+        data_type: VARCHAR
+        synonyms:
+          - buyer phone
+          - customer telephone
+          - customer contact number
+      
+      - name: customer_email
+        description: Customer email address
+        data_type: VARCHAR
+        synonyms:
+          - buyer email
+          - customer contact email
+      
+      # Financial Information
+      - name: subtotal
+        description: Subtotal amount before taxes and shipping
+        data_type: DECIMAL
+        synonyms:
+          - subtotal amount
+          - pre-tax total
+          - base amount
+      
+      - name: tax_amount
+        description: Total tax amount charged on the invoice
+        data_type: DECIMAL
+        synonyms:
+          - tax
+          - sales tax
+          - vat
+          - tax total
+      
+      - name: tax_rate
+        description: Tax rate percentage applied
+        data_type: DECIMAL
+        synonyms:
+          - tax percentage
+          - sales tax rate
+          - vat rate
+      
+      - name: shipping_amount
+        description: Shipping or freight charges
+        data_type: DECIMAL
+        synonyms:
+          - shipping
+          - freight
+          - delivery charges
+          - shipping cost
+      
+      - name: discount_amount
+        description: Total discount amount applied
+        data_type: DECIMAL
+        synonyms:
+          - discount
+          - discount total
+          - rebate
+          - price reduction
+      
+      - name: total_amount
+        description: Final total amount including all charges
+        data_type: DECIMAL
+        synonyms:
+          - total
+          - grand total
+          - amount due
+          - invoice total
+          - final amount
+      
+      # Additional Fields
+      - name: currency
+        description: Currency code (e.g., USD, EUR, GBP)
+        data_type: VARCHAR
+        synonyms:
+          - currency code
+          - money type
+          - denomination
+      
+      - name: payment_terms
+        description: Payment terms and conditions
+        data_type: VARCHAR
+        synonyms:
+          - terms
+          - payment conditions
+          - net terms
+          - payment agreement
+      
+      - name: po_number
+        description: Purchase order number
+        data_type: VARCHAR
+        synonyms:
+          - po
+          - purchase order
+          - po num
+          - order number
+      
+      - name: notes
+        description: Additional notes or comments on the invoice
+        data_type: VARCHAR
+        synonyms:
+          - comments
+          - remarks
+          - additional info
+          - memo
+      
+      # Metadata
+      - name: created_timestamp
+        description: Timestamp when the record was created in the database
+        data_type: TIMESTAMP_NTZ
+        synonyms:
+          - created at
+          - creation time
+          - inserted at
+
+  # Invoice Detail Table
+  - name: invoice_detail
+    description: Individual line items on invoices showing products or services purchased
+    database: invoice_processing_poc
+    schema: invoice_pipeline
+    synonyms:
+      - line items
+      - invoice lines
+      - detail lines
+      - invoice items
+    
+    columns:
+      # Primary Key
+      - name: invoice_detail_id
+        description: Unique identifier for the invoice line item record
+        data_type: NUMBER
+        synonyms:
+          - detail id
+          - line item id
+          - line pk
+      
+      - name: invoice_id
+        description: Foreign key reference to the parent invoice
+        data_type: NUMBER
+        synonyms:
+          - parent invoice id
+          - invoice reference
+      
+      - name: line_number
+        description: Line item sequence number on the invoice
+        data_type: NUMBER
+        synonyms:
+          - line num
+          - item number
+          - row number
+          - sequence number
+      
+      # Line Item Information
+      - name: item_description
+        description: Description of the product or service
+        data_type: VARCHAR
+        synonyms:
+          - description
+          - item desc
+          - product description
+          - service description
+          - product name
+      
+      - name: item_code
+        description: Item code, SKU, or product ID
+        data_type: VARCHAR
+        synonyms:
+          - sku
+          - product code
+          - part number
+          - item id
+          - product sku
+      
+      - name: quantity
+        description: Quantity of items ordered
+        data_type: DECIMAL
+        synonyms:
+          - qty
+          - amount
+          - count
+          - number of units
+      
+      - name: unit_of_measure
+        description: Unit of measure (e.g., EA, HR, BOX, LB)
+        data_type: VARCHAR
+        synonyms:
+          - uom
+          - unit
+          - measure
+          - measurement unit
+      
+      - name: unit_price
+        description: Price per unit
+        data_type: DECIMAL
+        synonyms:
+          - price per unit
+          - unit cost
+          - price each
+          - rate
+      
+      - name: line_amount
+        description: Total line amount (quantity × unit price)
+        data_type: DECIMAL
+        synonyms:
+          - line total
+          - extended price
+          - item total
+          - line item amount
+      
+      - name: tax_amount
+        description: Tax amount for this line item
+        data_type: DECIMAL
+        synonyms:
+          - line tax
+          - item tax
+          - line item tax
+      
+      # Additional Fields
+      - name: notes
+        description: Additional notes for this line item
+        data_type: VARCHAR
+        synonyms:
+          - line notes
+          - item notes
+          - comments
+          - remarks
+      
+      # Metadata
+      - name: created_timestamp
+        description: Timestamp when the line item record was created
+        data_type: TIMESTAMP_NTZ
+        synonyms:
+          - created at
+          - creation time
+          - inserted at
+
+# Relationships
+relationships:
+  - name: invoice_to_details
+    description: One-to-many relationship from invoice header to line items
+    from_table: invoice
+    from_column: invoice_id
+    to_table: invoice_detail
+    to_column: invoice_id
+    relationship_type: one_to_many
+    join_type: left
+
+# Metrics (Common Aggregations)
+metrics:
+  - name: total_invoices
+    description: Total count of invoices
+    calculation: COUNT(invoice.invoice_id)
+    
+  - name: total_revenue
+    description: Total revenue across all invoices
+    calculation: SUM(invoice.total_amount)
+    
+  - name: average_invoice_value
+    description: Average value of an invoice
+    calculation: AVG(invoice.total_amount)
+    
+  - name: total_line_items
+    description: Total count of all line items across all invoices
+    calculation: COUNT(invoice_detail.invoice_detail_id)
+    
+  - name: average_line_items_per_invoice
+    description: Average number of line items per invoice
+    calculation: COUNT(invoice_detail.invoice_detail_id) / COUNT(DISTINCT invoice.invoice_id)
+

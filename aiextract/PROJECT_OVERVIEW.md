@@ -1,20 +1,20 @@
 # Snowflake AI Invoice Processing Pipeline - Project Overview
 
-##  Project Summary
+## 🎯 Project Summary
 
 This proof-of-concept demonstrates an **automated, AI-powered invoice processing pipeline** built entirely in Snowflake. The pipeline uses Snowflake Cortex AI functions to extract structured data from PDF invoices and processes them through a series of automated tasks and streams.
 
 ### Key Features
 
--  **Automated PDF Processing** - Uses Snowflake Cortex AI to extract invoice data
--  **Stream-Based Architecture** - Real-time processing with Snowflake Streams
--  **Task Orchestration** - Automated workflows using Snowflake Tasks
--  **Structured Data Output** - Normalized tables for invoice headers and line items
--  **Monitoring & Validation** - Built-in views and procedures for tracking
--  **Scalable Design** - Handles single files or batch processing
--  **Error Handling** - Captures and logs extraction failures
+- ✅ **Automated PDF Processing** - Uses Snowflake Cortex AI to extract invoice data
+- ✅ **Stream-Based Architecture** - Real-time processing with Snowflake Streams
+- ✅ **Task Orchestration** - Automated workflows using Snowflake Tasks
+- ✅ **Structured Data Output** - Normalized tables for invoice headers and line items
+- ✅ **Monitoring & Validation** - Built-in views and procedures for tracking
+- ✅ **Scalable Design** - Handles single files or batch processing
+- ✅ **Error Handling** - Captures and logs extraction failures
 
-##  Project Structure
+## 📁 Project Structure
 
 ```
 Document Parsing/
@@ -33,7 +33,7 @@ Document Parsing/
 └── PROJECT_OVERVIEW.md                   # This file
 ```
 
-##  Architecture
+## 🏗️ Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -97,7 +97,7 @@ Document Parsing/
          └───────────────────────┘
 ```
 
-##  Data Flow
+## 📊 Data Flow
 
 ### JSON Schema
 
@@ -162,8 +162,9 @@ The AI extraction produces JSON with this structure:
 
 ### Database Schema
 
-**invoice_stage_directory**
-- Tracks files in the stage
+**invoice_stage (with implicit directory table)**
+- Internal stage for PDF storage
+- Directory table automatically maintained by Snowflake
 - Monitored by stream
 
 **raw_json**
@@ -193,7 +194,7 @@ The AI extraction produces JSON with this structure:
 - Line item fields (description, quantity, price, amount)
 - Additional fields (category, notes)
 
-##  Quick Start
+## 🚀 Quick Start
 
 ### Option 1: Fastest Path (5 minutes)
 
@@ -247,20 +248,20 @@ SELECT * FROM pipeline_monitoring;
 4. Implement data quality checks
 5. Plan for archival and retention
 
-##  Testing
+## 🧪 Testing
 
 The project includes **40+ comprehensive tests** covering:
 
--  Object creation validation
--  File upload and detection
--  AI extraction accuracy
--  JSON parsing correctness
--  Data quality validation
--  Foreign key relationships
--  Financial calculations
--  Task execution monitoring
--  Performance metrics
--  End-to-end pipeline trace
+- ✅ Object creation validation
+- ✅ File upload and detection
+- ✅ AI extraction accuracy
+- ✅ JSON parsing correctness
+- ✅ Data quality validation
+- ✅ Foreign key relationships
+- ✅ Financial calculations
+- ✅ Task execution monitoring
+- ✅ Performance metrics
+- ✅ End-to-end pipeline trace
 
 Run the complete test suite:
 
@@ -269,7 +270,7 @@ Run the complete test suite:
 -- Review output for any failures
 ```
 
-##  Monitoring Queries
+## 🔍 Monitoring Queries
 
 ### Pipeline Health Check
 ```sql
@@ -314,7 +315,7 @@ ORDER BY scheduled_time DESC
 LIMIT 20;
 ```
 
-##  Use Cases
+## 💡 Use Cases
 
 ### Accounts Payable Automation
 - Automatically extract vendor invoices
@@ -340,7 +341,7 @@ LIMIT 20;
 - Enable quick retrieval
 - Reduce manual data entry
 
-##  Key Benefits
+## 🎯 Key Benefits
 
 ### Business Benefits
 - **95% reduction** in manual data entry time
@@ -356,7 +357,7 @@ LIMIT 20;
 - **Easy to modify** - pure SQL implementation
 - **Integrated** - direct access to data warehouse
 
-##  Performance & Costs
+## 📈 Performance & Costs
 
 ### Typical Processing Times
 - Small invoice (<100KB): 5-10 seconds
@@ -375,11 +376,11 @@ LIMIT 20;
 ## 🔒 Security & Compliance
 
 ### Data Security
--  Files stored in secure Snowflake stage
--  Role-based access control (RBAC)
--  Audit logging of all operations
--  Encryption at rest and in transit
--  No data leaves Snowflake environment
+- ✅ Files stored in secure Snowflake stage
+- ✅ Role-based access control (RBAC)
+- ✅ Audit logging of all operations
+- ✅ Encryption at rest and in transit
+- ✅ No data leaves Snowflake environment
 
 ### Compliance Considerations
 - Invoice data retention policies
@@ -409,7 +410,7 @@ LIMIT 20;
    - Large volume processing requires cost monitoring
    - Consider batch optimization for high volumes
 
-##  Future Enhancements
+## 🔮 Future Enhancements
 
 ### Potential Additions
 - [ ] Email integration (process invoices from email)
@@ -430,7 +431,7 @@ LIMIT 20;
 - [ ] Duplicate detection algorithms
 - [ ] Smart routing based on content
 
-##  Resources
+## 📚 Resources
 
 ### Snowflake Documentation
 - [Snowflake Cortex](https://docs.snowflake.com/en/user-guide/snowflake-cortex)
@@ -445,7 +446,7 @@ LIMIT 20;
 - `TROUBLESHOOTING.md` - Problem solving
 - `testing_validation.sql` - Test suite
 
-##  Support & Contribution
+## 🤝 Support & Contribution
 
 ### Getting Help
 1. Check **TROUBLESHOOTING.md** for common issues
@@ -460,7 +461,7 @@ LIMIT 20;
 4. Extend monitoring capabilities
 5. Integrate with your existing systems
 
-##  Success Checklist
+## ✅ Success Checklist
 
 Before going to production:
 
@@ -477,7 +478,7 @@ Before going to production:
 - [ ] Team trained on operations
 - [ ] Backup and recovery tested
 
-##  Next Steps
+## 📞 Next Steps
 
 1. **Evaluate the POC**
    - Test with your actual invoice formats
@@ -503,7 +504,7 @@ Before going to production:
 
 ---
 
-##  Conclusion
+## 🎉 Conclusion
 
 This POC demonstrates a **production-ready approach** to automated invoice processing using Snowflake's native AI capabilities. The stream-based architecture ensures real-time processing, while the task orchestration provides reliability and automation.
 
