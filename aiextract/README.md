@@ -16,6 +16,8 @@ This POC includes everything you need to deploy and run an AI-powered invoice pr
 |------|-------------|----------|
 | **snowflake_invoice_pipeline_v2.sql** | Main implementation (RECOMMENDED) | Deploy the pipeline |
 | **snowflake_invoice_pipeline.sql** | Alternative version with detailed comments | Learn the implementation |
+| **create_semantic_view.sql** | Semantic view creation script | Enable natural language queries |
+| **invoice_semantic_model.yaml** | Semantic model definition | Reference or customize the model |
 | **testing_validation.sql** | 40+ comprehensive tests | Validate the deployment |
 | **AI_EXTRACT_EXAMPLES.sql** | AI_EXTRACT function examples | Learn how AI_EXTRACT works |
 
@@ -98,6 +100,15 @@ SELECT * FROM invoice_summary;
 -- See line items
 SELECT * FROM invoice_detail_view;
 ```
+
+### 5. Create Semantic View (Optional)
+
+```sql
+-- Enable natural language queries
+@aiextract/create_semantic_view.sql
+```
+
+This adds semantic layer capabilities for natural language queries and Cortex Agent integration.
 
 **Done!** Your first invoice is processed. 🎉
 
@@ -211,6 +222,13 @@ Read these carefully:
 - Secure (no data leaves Snowflake)
 - Scalable architecture
 - Comprehensive error handling
+
+### 🧠 Semantic View (Optional)
+- Natural language query capabilities
+- Comprehensive descriptions and synonyms for all fields
+- Pre-defined relationships and metrics
+- Ready for Cortex Agent integration
+- YAML-defined semantic model
 
 ---
 

@@ -66,6 +66,12 @@ This proof-of-concept demonstrates an automated invoice processing pipeline usin
 - `invoice_summary`: Aggregated invoice information
 - `invoice_detail_view`: Denormalized view of invoices and line items
 
+### 5. **Semantic Layer (Optional)**
+- `invoice_semantic_view`: Semantic view with natural language capabilities
+- `invoice_semantic_model.yaml`: YAML definition of the semantic model
+- Includes comprehensive descriptions, synonyms, and relationships
+- Enables natural language queries and advanced analytics
+
 ## JSON Schema
 
 The AI extraction produces JSON with this structure:
@@ -221,6 +227,28 @@ ALTER TASK task_extract_invoices RESUME;
 -- Verify task state
 SHOW TASKS;
 ```
+
+### Step 5: Create Semantic View (Optional)
+
+For enhanced natural language query capabilities, create the semantic view:
+
+```sql
+-- Run the semantic view creation script
+@aiextract/create_semantic_view.sql
+```
+
+This creates a semantic view with:
+- Comprehensive descriptions for all columns
+- Multiple aliases/synonyms for natural language queries
+- Relationship definitions between invoice and invoice_detail tables
+- Pre-defined metrics for common aggregations
+
+The semantic view enables queries like:
+- "Show me all invoices from last month"
+- "What is the total revenue from vendor X?"
+- "Which customers have the highest invoice totals?"
+
+**Note:** The semantic model definition is also available in `invoice_semantic_model.yaml` for reference.
 
 ## Usage
 
@@ -416,6 +444,7 @@ DROP PROCEDURE IF EXISTS refresh_and_process();
 DROP PROCEDURE IF EXISTS get_pipeline_stats();
 DROP STREAM IF EXISTS raw_json_stream;
 DROP STREAM IF EXISTS invoice_stage_stream;
+DROP SEMANTIC VIEW IF EXISTS invoice_semantic_view;
 DROP VIEW IF EXISTS invoice_detail_view;
 DROP VIEW IF EXISTS invoice_summary;
 DROP VIEW IF EXISTS pipeline_monitoring;
@@ -517,6 +546,60 @@ BEGIN
     DELETE FROM raw_json
     WHERE extraction_timestamp < DATEADD(DAY, -90, CURRENT_TIMESTAMP());
 END;
+```
+
+### 5. Use Semantic View for Natural Language Queries
+
+After creating the semantic view, you can enable natural language queries:
+
+```sql
+-- Example queries using the semantic view
+-- These work well with Cortex Analyst or Cortex Agent
+
+-- Simple aggregation
+SELECT 
+    vendor_name,
+    COUNT(*) as invoice_count,
+    SUM(total_amount) as total_spent
+FROM invoice_semantic_view
+GROUP BY vendor_name
+ORDER BY total_spent DESC;
+
+-- Join with line items
+SELECT 
+    i.invoice_number,
+    i.vendor_name,
+    i.invoice_date,
+    COUNT(d.line_number) as item_count,
+    SUM(d.line_amount) as total_line_amount
+FROM invoice_semantic_view i
+LEFT JOIN invoice_semantic_view d ON i.invoice_id = d.invoice_id
+GROUP BY i.invoice_number, i.vendor_name, i.invoice_date
+ORDER BY i.invoice_date DESC;
+```
+
+The semantic view enables natural language queries such as:
+- "Show me invoices from last quarter with totals greater than $10,000"
+- "Which vendors have we purchased from most frequently?"
+- "What is the average invoice value by month?"
+- "Show me all line items for medical supplies"
+
+**Integration with Cortex Agent:**
+```sql
+-- Create a Cortex Agent using the semantic view
+CREATE OR REPLACE CORTEX AGENT invoice_analyst_agent
+    WAREHOUSE = SNOWFLAKE_INTELLIGENCE_WH
+    DESCRIPTION = 'AI assistant for invoice data analysis'
+AS
+BEGIN
+    ADD VIEW invoice_semantic_view;
+END;
+
+-- Query using natural language
+SELECT SNOWFLAKE.CORTEX.COMPLETE_AGENT(
+    'invoice_analyst_agent',
+    'What were our top 5 vendors by spending last month?'
+);
 ```
 
 ## Additional Resources
