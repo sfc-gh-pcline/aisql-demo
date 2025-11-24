@@ -2,11 +2,14 @@
 
 Get up and running with the Invoice Search Pipeline in minutes.
 
+> **📁 File Upload Note:** When using the `PUT` command, replace `/path/to/your/` with your actual file path. On Windows, use forward slashes (e.g., `file://C:/Users/YourName/Documents/invoice.pdf`). On Mac/Linux, use the full path (e.g., `file:///Users/yourname/Documents/invoice.pdf`).
+
 ## Prerequisites
 
 - Snowflake account with Cortex AI features enabled
-- Warehouse: `COMPUTE_WH` (or adjust warehouse names in the SQL)
-- Sample invoice PDFs (we'll use the ones from the docs folder)
+- Warehouse: `SNOWFLAKE_INTELLIGENCE_WH`
+- Sample invoice files (PDF, DOCX, or other supported formats)
+- **Note:** This project uses the same schema and stage as the aiextract project
 
 ## 5-Minute Setup
 
@@ -18,12 +21,12 @@ Get up and running with the Invoice Search Pipeline in minutes.
 ```
 
 This single script creates everything you need:
-- ✓ Database schema
-- ✓ Stage and stream
+- ✓ Database and schema (if not exists)
+- ✓ Stage (shared with aiextract)
+- ✓ Table for parsed content
+- ✓ Stream for monitoring new files
 - ✓ Parsing task
 - ✓ Search service
-- ✓ Semantic view
-- ✓ Cortex Agent
 
 **Time: ~2 minutes**
 
@@ -31,25 +34,28 @@ This single script creates everything you need:
 
 ```sql
 USE DATABASE invoice_processing_poc;
-USE SCHEMA invoice_search;
+USE SCHEMA invoice_pipeline;
 
--- Upload the sample PDFs
-PUT file:///Users/pcline/My\ Drive/Accounts/Grayson/Inspire/Document\ Parsing/aisql-demo/docs/MB66680464.pdf 
-    @invoice_search_stage 
+-- Upload invoice files from your local system
+-- Replace the path with your actual file location
+PUT file:///path/to/your/invoice1.pdf 
+    @invoice_stage 
     AUTO_COMPRESS=FALSE;
 
-PUT file:///Users/pcline/My\ Drive/Accounts/Grayson/Inspire/Document\ Parsing/aisql-demo/docs/B20277431.pdf 
-    @invoice_search_stage 
+PUT file:///path/to/your/invoice2.pdf 
+    @invoice_stage 
     AUTO_COMPRESS=FALSE;
 
--- Refresh the stage
-ALTER STAGE invoice_search_stage REFRESH;
+-- Refresh the stage to update the directory table
+ALTER STAGE invoice_stage REFRESH;
 
 -- Verify upload
-SELECT * FROM DIRECTORY(@invoice_search_stage);
+SELECT * FROM DIRECTORY(@invoice_stage);
 ```
 
 **Time: ~1 minute**
+
+> **Note:** Replace `/path/to/your/` with the actual path to your invoice files. On Windows, use forward slashes: `file://C:/Users/YourName/Documents/invoice.pdf`
 
 ### 3. Process the Invoices
 
@@ -94,53 +100,39 @@ Search for specific content in invoices:
 
 ```sql
 -- Find invoices mentioning specific terms
-SELECT * FROM TABLE(
+SELECT 
+    file_name,
+    parse_timestamp
+FROM TABLE(
     invoice_search_service.SEARCH(
-        'invoice',
-        5
+        'medical supplies equipment',
+        10
     )
 );
 ```
 
-### 📊 Structured Query
+### 📊 Check Parsing Status
 
-Query invoice data (requires aiextract project to be set up):
+Monitor what's been processed:
 
 ```sql
--- Get invoice summary
+-- View recently parsed invoices
 SELECT 
-    invoice_number,
-    vendor_name,
-    invoice_date,
-    total_amount,
-    currency_code
-FROM invoice_semantic_view
-ORDER BY invoice_date DESC
+    file_name,
+    processing_status,
+    parse_timestamp
+FROM parsed_invoices
+ORDER BY parse_timestamp DESC
 LIMIT 10;
 ```
 
-### 🤖 Ask the Agent
+### 📈 Search Statistics
 
-Use natural language to query your invoices:
+Get insights into your indexed content:
 
 ```sql
--- Simple question
-SELECT SNOWFLAKE.CORTEX.COMPLETE_AGENT(
-    'invoice_agent',
-    'How many invoices do we have?'
-);
-
--- More complex query
-SELECT SNOWFLAKE.CORTEX.COMPLETE_AGENT(
-    'invoice_agent',
-    'Show me the total amount for all invoices and break it down by vendor'
-);
-
--- Search-based query
-SELECT SNOWFLAKE.CORTEX.COMPLETE_AGENT(
-    'invoice_agent',
-    'Find invoices that mention medical supplies or equipment'
-);
+-- View search service statistics
+SELECT * FROM search_service_stats;
 ```
 
 ---
@@ -152,45 +144,61 @@ SELECT SNOWFLAKE.CORTEX.COMPLETE_AGENT(
 **Scenario:** You remember a vendor mentioned "rush delivery" but don't know which invoice.
 
 ```sql
-SELECT * FROM TABLE(
+SELECT 
+    file_name,
+    parse_timestamp
+FROM TABLE(
     invoice_search_service.SEARCH(
-        'rush delivery',
+        'rush delivery expedited',
         10
     )
 );
 ```
 
-### Use Case 2: Vendor Analysis
+### Use Case 2: Find Specific Products
 
-**Scenario:** You want to know which vendors you've paid the most.
+**Scenario:** Find all invoices mentioning medical equipment.
 
 ```sql
-SELECT SNOWFLAKE.CORTEX.COMPLETE_AGENT(
-    'invoice_agent',
-    'Which vendors have we spent the most money with? Show me the top 5.'
+SELECT 
+    file_name,
+    parse_timestamp,
+    file_size
+FROM TABLE(
+    invoice_search_service.SEARCH(
+        'medical equipment surgical supplies',
+        20
+    )
 );
 ```
 
-### Use Case 3: Date-Based Queries
+### Use Case 3: Search for Contract Terms
 
-**Scenario:** You need all invoices from last quarter.
+**Scenario:** Find invoices with specific payment terms or conditions.
 
 ```sql
-SELECT SNOWFLAKE.CORTEX.COMPLETE_AGENT(
-    'invoice_agent',
-    'Show me all invoices from the last 3 months with their totals'
+SELECT 
+    file_name
+FROM TABLE(
+    invoice_search_service.SEARCH(
+        'net 30 payment terms',
+        15
+    )
 );
 ```
 
-### Use Case 4: Item-Level Search
+### Use Case 4: Monitor Recent Activity
 
-**Scenario:** You want to find all invoices containing a specific product.
+**Scenario:** Check what invoices were recently processed.
 
 ```sql
-SELECT SNOWFLAKE.CORTEX.COMPLETE_AGENT(
-    'invoice_agent',
-    'Find all invoices where we purchased laptops or computers'
-);
+SELECT 
+    file_name,
+    processing_status,
+    parse_timestamp
+FROM parsed_invoices
+WHERE parse_timestamp > DATEADD(day, -7, CURRENT_TIMESTAMP())
+ORDER BY parse_timestamp DESC;
 ```
 
 ---
@@ -228,38 +236,57 @@ If you see errors:
 
 ### Add More Invoices
 
-```bash
-# Upload a whole directory
-PUT file:///path/to/invoices/*.pdf @invoice_search_stage AUTO_COMPRESS=FALSE;
+```sql
+-- Upload multiple files from a directory
+-- Use wildcards to upload all files at once
+PUT file:///path/to/your/invoices/* @invoice_stage AUTO_COMPRESS=FALSE;
 ```
 
 Then refresh and process:
 ```sql
+ALTER STAGE invoice_stage REFRESH;
 CALL refresh_and_parse();
 ```
 
-### Customize the Agent
+> **Tip:** You can also use Snowflake's web interface to upload files by navigating to **Data > Databases > invoice_processing_poc > invoice_pipeline > Stages > invoice_stage** and clicking the **+ Files** button.
 
-Edit the agent's orchestration instructions to match your specific needs:
+### Build Custom Search Queries
+
+Create saved queries for common searches:
 
 ```sql
-ALTER CORTEX AGENT invoice_agent SET
-    ORCHESTRATION_INSTRUCTIONS = 'Your custom instructions here...';
+-- Create a view for frequently searched terms
+CREATE OR REPLACE VIEW urgent_invoices AS
+SELECT 
+    file_name,
+    parse_timestamp,
+    file_url
+FROM TABLE(
+    invoice_search_service.SEARCH(
+        'urgent rush expedited priority',
+        50
+    )
+);
 ```
 
-### Create Reports
+### Integrate with Structured Data
 
-Build standard queries for common questions:
+If you're also running the aiextract project, combine search with structured data:
 
 ```sql
--- Monthly spending report
+-- Find invoices by content, then get structured details
+WITH search_results AS (
+    SELECT DISTINCT file_name
+    FROM TABLE(invoice_search_service.SEARCH('medical equipment', 20))
+)
 SELECT 
-    DATE_TRUNC('MONTH', invoice_date) as month,
-    COUNT(*) as invoice_count,
-    SUM(total_amount) as total_spent
-FROM invoice_semantic_view
-GROUP BY month
-ORDER BY month DESC;
+    i.invoice_number,
+    i.vendor_name,
+    i.invoice_date,
+    i.total_amount
+FROM invoice i
+JOIN search_results sr ON i.file_name = sr.file_name
+ORDER BY i.invoice_date DESC;
 ```
 
 ---
@@ -279,16 +306,6 @@ CALL refresh_and_parse();
 -- Wait a minute, then try search again
 ```
 
-### Problem: Agent gives unexpected answers
-
-**Solution:**
-```sql
--- Test the underlying views directly
-SELECT COUNT(*) FROM invoice_semantic_view;
-
--- If this returns 0, you need to set up the aiextract project first
--- The semantic view joins data from invoice_pipeline.invoice and invoice_pipeline.invoice_detail
-```
 
 ### Problem: "Cortex AI not available" error
 
@@ -305,26 +322,32 @@ SELECT COUNT(*) FROM invoice_semantic_view;
 Begin with 2-3 sample invoices to test the pipeline before scaling up.
 
 ### 2. Use Descriptive File Names
-Name your PDFs clearly: `invoice_vendor_date.pdf` helps with organization.
+Name your files clearly: `invoice_vendor_date.pdf` helps with organization and makes search results more meaningful.
 
 ### 3. Monitor Regularly
-Check the `search_pipeline_monitoring` view daily when starting out.
+Check the `search_pipeline_monitoring` view daily when starting out to ensure all files are processing successfully.
 
-### 4. Iterate on Agent Instructions
-As you use the agent, refine the orchestration instructions based on common questions.
+### 4. Optimize Search Queries
+Experiment with different search terms and combinations to find what works best for your use cases.
 
 ### 5. Combine with aiextract
 For best results, run both projects:
-- **aiextract**: Structured data extraction
-- **search**: Full-text search and conversational queries
+- **aiextract**: Structured data extraction for analytics and reporting
+- **search**: Full-text search for content discovery and retrieval
 
 ---
 
 ## Quick Reference Commands
 
 ```sql
--- Upload files
-PUT file:///path/to/invoice.pdf @invoice_search_stage AUTO_COMPRESS=FALSE;
+-- Upload files (replace with your actual file path)
+PUT file:///path/to/your/invoice.pdf @invoice_stage AUTO_COMPRESS=FALSE;
+
+-- Upload multiple files at once
+PUT file:///path/to/your/invoices/* @invoice_stage AUTO_COMPRESS=FALSE;
+
+-- Refresh stage after upload
+ALTER STAGE invoice_stage REFRESH;
 
 -- Process files
 CALL refresh_and_parse();
@@ -332,8 +355,8 @@ CALL refresh_and_parse();
 -- Search invoices
 SELECT * FROM TABLE(invoice_search_service.SEARCH('search term', 10));
 
--- Ask agent
-SELECT SNOWFLAKE.CORTEX.COMPLETE_AGENT('invoice_agent', 'your question');
+-- Check parsed invoices
+SELECT * FROM parsed_invoices ORDER BY parse_timestamp DESC;
 
 -- Check status
 SELECT * FROM search_pipeline_monitoring;
@@ -365,5 +388,5 @@ For more detailed information, see the full [README.md](./README.md) documentati
 
 **You're all set! 🎉**
 
-Start querying your invoices with natural language and powerful search capabilities.
+Start searching your invoices with powerful semantic search capabilities powered by Snowflake Cortex AI.
 

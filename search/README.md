@@ -2,13 +2,13 @@
 
 ## Overview
 
-This project creates an intelligent, searchable invoice system using Snowflake's Cortex AI capabilities. It combines document parsing, semantic search, and conversational AI to provide powerful invoice querying capabilities.
+This project creates a searchable invoice repository using Snowflake's Cortex AI capabilities. It uses AI_PARSE_DOCUMENT to extract full text from invoice files and Cortex Search Service to enable powerful semantic search across all invoice content.
 
 ## Architecture
 
 ```
 ┌─────────────────┐
-│   PDF Files     │
+│ Invoice Files   │
 │   (Stage)       │
 └────────┬────────┘
          │
@@ -20,6 +20,7 @@ This project creates an intelligent, searchable invoice system using Snowflake's
          ▼
 ┌─────────────────────────┐
 │  Task: Parse Document   │
+│  (AI_PARSE_DOCUMENT)    │
 │  (LAYOUT mode)          │
 └────────┬────────────────┘
          │
@@ -29,89 +30,60 @@ This project creates an intelligent, searchable invoice system using Snowflake's
 │  (Full text + metadata) │
 └────────┬────────────────┘
          │
-         ├──────────────────────┐
-         ▼                      ▼
-┌──────────────────┐   ┌──────────────────┐
-│ Cortex Search    │   │  Semantic View   │
-│ Service          │   │  (Join invoice   │
-│                  │   │   + line items)  │
-└────────┬─────────┘   └────────┬─────────┘
-         │                      │
-         └──────────┬───────────┘
-                    ▼
-         ┌──────────────────────┐
-         │   Cortex Agent       │
-         │   "Invoice Agent"    │
-         └──────────────────────┘
+         ▼
+┌─────────────────────────┐
+│ Cortex Search Service   │
+│ (Semantic Search)       │
+└─────────────────────────┘
 ```
 
 ## Components
 
-### 1. Document Parsing Layer
+### 1. Database and Schema
+- **Database:** `invoice_processing_poc`
+- **Schema:** `invoice_pipeline` (shared with aiextract project)
 
-**Stage and Stream:**
-- `invoice_search_stage`: Internal stage for PDF storage
-- `invoice_search_stream`: Stream monitoring for new files
+### 2. Stage and Stream
+- **Stage:** `invoice_stage` - Internal stage for invoice file storage (shared with aiextract)
+  - Server-side encryption enabled
+  - Directory table enabled for file tracking
+- **Stream:** `invoice_parse_stream` - Monitors stage for new files to parse
 
-**Parsing Task:**
-- `task_parse_invoices`: Uses `SNOWFLAKE.CORTEX.PARSE_DOCUMENT` with LAYOUT mode
-- Extracts full text content and structure from PDFs
-- Stores results in `parsed_invoices` table
+### 3. Parsing Layer
+- **Task:** `task_parse_invoices`
+  - Uses `AI_PARSE_DOCUMENT` with LAYOUT mode
+  - Extracts full text content and structure from invoice files
+  - Runs on `SNOWFLAKE_INTELLIGENCE_WH` warehouse
+  - Scheduled to run every 1 minute when new files are detected
+- **Table:** `parsed_invoices`
+  - Stores parsed content (VARIANT)
+  - Includes file metadata (name, URL, size, timestamps)
+  - Processing status tracking
 
-**Table:**
-- `parsed_invoices`: Contains parsed content (VARIANT) and extracted text (VARCHAR)
+### 4. Search Layer
+- **Cortex Search Service:** `invoice_search_service`
+  - Full-text semantic search on invoice content
+  - Indexes the `parsed_content` from parsed invoices
+  - Provides natural language search capabilities
+  - Target lag: 1 minute for near real-time updates
+  - Indexed attributes: `file_name`, `file_size`, `last_modified`, `parse_timestamp`
 
-### 2. Search Layer
-
-**Cortex Search Service:**
-- `invoice_search_service`: Full-text semantic search on invoice content
-- Indexes the `extracted_text` from parsed invoices
-- Provides natural language search capabilities
-- Target lag: 1 minute for near real-time updates
-
-**Attributes indexed:**
-- `file_name`
-- `file_size`
-- `last_modified`
-- `parse_timestamp`
-
-### 3. Structured Query Layer
-
-**Semantic View:**
-- `invoice_semantic_view`: Joins invoice headers with line items from aiextract project
-- Includes comprehensive semantic model with:
-  - Table descriptions
-  - Column descriptions and synonyms
-  - Join definitions
-
-**Available Fields:**
-- Invoice header: invoice number, dates, vendor/customer info, totals
-- Line items: descriptions, quantities, prices, amounts
-
-### 4. Conversational AI Layer
-
-**Cortex Agent:**
-- `invoice_agent`: Intelligent assistant for invoice queries
-- Combines search service (unstructured) with semantic view (structured)
-- Natural language interface for complex queries
-
-**Agent Capabilities:**
-- Find invoices by number, vendor, customer, date, or amount
-- Full-text search across invoice content
-- Analyze spending patterns and trends
-- Calculate aggregations and summaries
-- Provide insights from invoice data
+### 5. Monitoring
+- **View:** `search_pipeline_monitoring` - Track processing status and errors
+- **View:** `search_service_stats` - Search service statistics and metrics
+- **Procedure:** `refresh_and_parse()` - Manual processing trigger
 
 ## Key Differences from aiextract Project
 
 | Feature | aiextract | search |
 |---------|-----------|--------|
-| **Extraction Method** | AI_EXTRACT (structured) | PARSE_DOCUMENT (layout-aware) |
+| **Extraction Method** | AI_EXTRACT (structured) | AI_PARSE_DOCUMENT (layout-aware) |
 | **Output** | Structured JSON with schema | Full text + layout information |
-| **Primary Use** | Data extraction & ETL | Search & retrieval |
+| **Primary Use** | Data extraction & ETL | Full-text search & retrieval |
 | **Search** | None | Cortex Search Service |
-| **Query Interface** | SQL only | SQL + Cortex Agent |
+| **Query Interface** | SQL only | SQL with semantic search |
 | **Schema** | Pre-defined response format | Layout-based parsing |
+| **Tables** | invoice + invoice_detail (normalized) | parsed_invoices (document-oriented) |
 
 ## Setup Instructions
 
@@ -122,26 +94,29 @@ This project creates an intelligent, searchable invoice system using Snowflake's
 @search/invoice_search_pipeline.sql
 ```
 
-This creates:
-- Database schema: `invoice_processing_poc.invoice_search`
-- Stage, stream, table, and task
-- Cortex Search Service
-- Semantic View
-- Cortex Agent
+This creates (in the `invoice_processing_poc.invoice_pipeline` schema):
+1. Database and schema (if not exists)
+2. Shared stage: `invoice_stage` (same as aiextract)
+3. Table: `parsed_invoices`
+4. Stream: `invoice_parse_stream`
+5. Task: `task_parse_invoices`
+6. Cortex Search Service: `invoice_search_service`
+7. Monitoring views and helper procedures
 
 ### Step 2: Upload Invoice Files
 
 ```sql
-USE SCHEMA invoice_search;
+USE DATABASE invoice_processing_poc;
+USE SCHEMA invoice_pipeline;
 
--- Upload files to the stage
-PUT file:///path/to/invoices/*.pdf @invoice_search_stage AUTO_COMPRESS=FALSE;
+-- Upload files to the shared stage
+PUT file:///path/to/invoices/*.pdf @invoice_stage AUTO_COMPRESS=FALSE;
 
 -- Refresh directory
-ALTER STAGE invoice_search_stage REFRESH;
+ALTER STAGE invoice_stage REFRESH;
 
 -- Verify files
-SELECT * FROM DIRECTORY(@invoice_search_stage);
+SELECT * FROM DIRECTORY(@invoice_stage);
 ```
 
 ### Step 3: Start the Pipeline
@@ -166,11 +141,12 @@ SELECT * FROM search_service_stats;
 
 ## Usage Examples
 
-### 1. Full-Text Search
+### 1. Search for Specific Content
 
-Search for invoices containing specific text:
+Search for invoices containing specific terms:
 
 ```sql
+-- Find invoices mentioning medical supplies
 SELECT * FROM TABLE(
     invoice_search_service.SEARCH(
         'medical supplies equipment',
@@ -179,70 +155,40 @@ SELECT * FROM TABLE(
 );
 ```
 
-### 2. Structured Queries
-
-Query structured invoice data:
+### 2. Search with Multiple Terms
 
 ```sql
--- Find all invoices from a specific vendor
+-- Find invoices about rush deliveries
 SELECT 
-    invoice_number,
-    invoice_date,
-    vendor_name,
-    total_amount,
-    COUNT(line_item_number) as item_count
-FROM invoice_semantic_view
-WHERE vendor_name ILIKE '%medical%'
-GROUP BY 1, 2, 3, 4
-ORDER BY invoice_date DESC;
-
--- Calculate total spending by vendor
-SELECT 
-    vendor_name,
-    COUNT(DISTINCT invoice_number) as invoice_count,
-    SUM(total_amount) as total_spent,
-    AVG(total_amount) as avg_invoice_amount
-FROM invoice_semantic_view
-GROUP BY vendor_name
-ORDER BY total_spent DESC;
-```
-
-### 3. Cortex Agent Queries
-
-Use natural language to query invoices:
-
-```sql
--- Ask the agent questions
-SELECT SNOWFLAKE.CORTEX.COMPLETE_AGENT(
-    'invoice_agent',
-    'Show me all invoices from last month totaling more than $1000'
-);
-
-SELECT SNOWFLAKE.CORTEX.COMPLETE_AGENT(
-    'invoice_agent',
-    'Which vendor have we spent the most money with?'
-);
-
-SELECT SNOWFLAKE.CORTEX.COMPLETE_AGENT(
-    'invoice_agent',
-    'Find invoices containing references to medical equipment'
-);
-
-SELECT SNOWFLAKE.CORTEX.COMPLETE_AGENT(
-    'invoice_agent',
-    'What are the most common items we purchase?'
+    parsed_id,
+    file_name,
+    parse_timestamp
+FROM TABLE(
+    invoice_search_service.SEARCH(
+        'rush delivery expedited',
+        20
+    )
 );
 ```
 
-### 4. Combined Search and Query
-
-The agent automatically uses both search and structured data:
+### 3. Monitor Recent Parsing
 
 ```sql
-SELECT SNOWFLAKE.CORTEX.COMPLETE_AGENT(
-    'invoice_agent',
-    'Find all invoices mentioning "rush delivery" and show me the total cost'
-);
+-- View recently parsed invoices
+SELECT 
+    file_name,
+    processing_status,
+    parse_timestamp
+FROM parsed_invoices
+ORDER BY parse_timestamp DESC
+LIMIT 10;
+```
+
+### 4. Search Service Statistics
+
+```sql
+-- Get search index statistics
+SELECT * FROM search_service_stats;
 ```
 
 ## Monitoring and Maintenance
@@ -287,45 +233,49 @@ LIMIT 20;
 
 The search project complements the aiextract project:
 
-1. **aiextract**: Structured data extraction → invoice tables
-2. **search**: Full-text indexing + semantic queries
+1. **aiextract**: Structured data extraction → normalized invoice tables
+2. **search**: Full-text document parsing → searchable content
 
-The semantic view (`invoice_semantic_view`) bridges both by:
-- Using structured data from aiextract's invoice tables
-- Making it queryable through the Cortex Agent
-- Combining with search service for powerful hybrid queries
+Both projects:
+- Share the same stage (`invoice_stage`) for file storage
+- Use the same schema (`invoice_pipeline`)
+- Can process the same invoice files independently
+- Provide different query capabilities (structured SQL vs semantic search)
 
 ## Advanced Features
 
-### Custom Search Queries
+### Search with Context
 
 ```sql
--- Search with filters
-SELECT * FROM TABLE(
+-- Search for multiple related terms
+SELECT 
+    file_name,
+    parse_timestamp,
+    file_size
+FROM TABLE(
     invoice_search_service.SEARCH(
-        'medical supplies',
-        10,
-        {'filters': {'file_size': {'$gt': 50000}}}
+        'medical supplies surgical equipment',
+        20
     )
 );
 ```
 
-### Agent Conversations
-
-The Cortex Agent maintains context in conversations:
+### Combining Search with SQL
 
 ```sql
--- Start a conversation
-SELECT SNOWFLAKE.CORTEX.COMPLETE_AGENT(
-    'invoice_agent',
-    'Show me invoices from Acme Corp'
-);
-
--- Follow-up question (agent remembers context)
-SELECT SNOWFLAKE.CORTEX.COMPLETE_AGENT(
-    'invoice_agent',
-    'What was the total amount?'
-);
+-- Search and then analyze results
+WITH search_results AS (
+    SELECT parsed_id
+    FROM TABLE(invoice_search_service.SEARCH('urgent rush', 50))
+)
+SELECT 
+    p.file_name,
+    p.parse_timestamp,
+    p.file_size
+FROM parsed_invoices p
+JOIN search_results sr ON p.parsed_id = sr.parsed_id
+WHERE p.processing_status = 'SUCCESS'
+ORDER BY p.parse_timestamp DESC;
 ```
 
 ## Troubleshooting
@@ -347,17 +297,6 @@ SELECT SNOWFLAKE.CORTEX.COMPLETE_AGENT(
    ALTER CORTEX SEARCH SERVICE invoice_search_service REFRESH;
    ```
 
-### Agent Not Working
-
-1. Verify agent exists:
-   ```sql
-   SHOW CORTEX AGENTS;
-   ```
-
-2. Check that both search service and semantic view are accessible:
-   ```sql
-   SELECT COUNT(*) FROM invoice_semantic_view;
-   ```
 
 ### Parsing Failures
 
@@ -403,24 +342,23 @@ To remove the search pipeline:
 -- Suspend task first
 ALTER TASK task_parse_invoices SUSPEND;
 
--- Drop all objects
-DROP AGENT IF EXISTS invoice_agent;
+-- Drop search-specific objects
 DROP CORTEX SEARCH SERVICE IF EXISTS invoice_search_service;
-DROP VIEW IF EXISTS invoice_semantic_view;
 DROP VIEW IF EXISTS search_pipeline_monitoring;
 DROP VIEW IF EXISTS search_service_stats;
 DROP PROCEDURE IF EXISTS refresh_and_parse();
-DROP STREAM IF EXISTS invoice_search_stream;
+DROP STREAM IF EXISTS invoice_parse_stream;
 DROP TABLE IF EXISTS parsed_invoices;
-DROP STAGE IF EXISTS invoice_search_stage;
-DROP SCHEMA IF EXISTS invoice_search;
+
+-- Note: invoice_stage is shared with aiextract - don't drop unless cleaning up everything
+-- Note: invoice_pipeline schema is shared with aiextract - don't drop unless cleaning up everything
 ```
 
 ## Next Steps
 
-1. **Enhance the Agent**: Add more orchestration rules for specific use cases
-2. **Add More Metadata**: Extract additional fields to make search more powerful
-3. **Create Dashboards**: Build Streamlit apps using the agent
-4. **Implement Alerts**: Set up notifications for specific invoice patterns
-5. **Expand Synonyms**: Add more synonyms to the semantic model for better natural language understanding
+1. **Enhance Search**: Add more metadata attributes to improve search filtering
+2. **Create Dashboards**: Build Streamlit apps using the search service
+3. **Implement Alerts**: Set up notifications for specific invoice patterns found through search
+4. **Optimize Performance**: Adjust target lag and warehouse size based on volume
+5. **Expand Use Cases**: Use search to find specific clauses, terms, or patterns in invoices
 
